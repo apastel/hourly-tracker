@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'src\main\resources\untitled.ui'
+# Form implementation generated from reading ui file 'src\main\resources\main_window.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.6
 #
@@ -52,6 +52,13 @@ class Ui_MainWindow(object):
         self.idleTime.setDisplayFormat("hh:mm")
         self.idleTime.setTimeSpec(QtCore.Qt.LocalTime)
         self.idleTime.setObjectName("idleTime")
+        self.workdayHours = QtWidgets.QSpinBox(self.centralwidget)
+        self.workdayHours.setGeometry(QtCore.QRect(370, 40, 42, 22))
+        self.workdayHours.setProperty("value", 8)
+        self.workdayHours.setObjectName("workdayHours")
+        self.workdayHoursLabel = QtWidgets.QLabel(self.centralwidget)
+        self.workdayHoursLabel.setGeometry(QtCore.QRect(276, 40, 81, 20))
+        self.workdayHoursLabel.setObjectName("workdayHoursLabel")
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 600, 21))
@@ -70,3 +77,4 @@ class Ui_MainWindow(object):
         self.startTimeLabel.setText(_translate("MainWindow", "Start Time"))
         self.endTimeLabel.setText(_translate("MainWindow", "End Time"))
         self.idleTimeLabel.setText(_translate("MainWindow", "Idle Time"))
+        self.workdayHoursLabel.setText(_translate("MainWindow", "Workday Hours"))
