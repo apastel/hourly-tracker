@@ -1,6 +1,5 @@
 from PyQt5.QtCore import QTime, QTimer
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
-import idle_time
+from PyQt5.QtWidgets import QApplication, QMainWindow
 from ui_form import Ui_MainWindow
 
 import sys
@@ -29,22 +28,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.idleTime.timeChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.update_end_time)
 
+
     @property
     def minutes_idle(self):
         return self._minutes_idle
-    
+
+
     @minutes_idle.setter
     def minutes_idle(self, new_value):
         if (self._minutes_idle != new_value and new_value != 0):
             self._minutes_idle = new_value
             self._notify_observers()
 
+
     def _notify_observers(self):
         for callback in self._callbacks:
             callback()
 
+
     def register_callback(self, callback):
         self._callbacks.append(callback)
+
 
     def get_login_time(self):
         if os_name == "windows":
@@ -65,9 +69,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
     def check_idle_time(self):
-        seconds_idle = int(int(subprocess.getoutput('xprintidle')) / 1000)
-        self.minutes_idle = math.floor(seconds_idle / 60)
-        print(f"Idle time: {self.minutes_idle}m {seconds_idle}s ")
+        if os_name.endswith("linux"):
+            seconds_idle = int(int(subprocess.getoutput('xprintidle')) / 1000)
+            self.minutes_idle = math.floor(seconds_idle / 60)
+            print(f"Idle time: {self.minutes_idle}m {seconds_idle}s ")
+        else:
+            print(f"Idle time not yet implemented in {os_name}")
+
 
     def increment_idle_time(self):
         self.idleTime.setTime(self.idleTime.time().addSecs(60))
