@@ -9,7 +9,7 @@ os_name = platform.uname()[0].lower()
 if os_name == "windows":
     import win32net
     import win32api
-from datetime import datetime
+from datetime import datetime, timedelta
 import subprocess
 
 
@@ -17,7 +17,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
 
-        self._minutes_idle = 0
+        self._cur_minutes_idle = 0
+        self.idle_threshold = 20
         self._callbacks = []
         self.setWindowTitle("Hourly Tracker")
         self.setupUi(self)
@@ -27,17 +28,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.startTime.timeChanged.connect(self.update_end_time)
         self.idleTime.timeChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.update_end_time)
+        self.idleTime.setDisplayFormat("h'h' mm'm'")
 
 
     @property
-    def minutes_idle(self):
-        return self._minutes_idle
+    def current_minutes_idle(self):
+        return self._cur_minutes_idle
 
 
-    @minutes_idle.setter
-    def minutes_idle(self, new_value):
-        if (self._minutes_idle != new_value and new_value != 0):
-            self._minutes_idle = new_value
+    @current_minutes_idle.setter
+    def current_minutes_idle(self, new_value):
+        if (self._cur_minutes_idle != new_value):
+            self._cur_minutes_idle = new_value
             self._notify_observers()
 
 
@@ -71,14 +73,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def check_idle_time(self):
         if os_name.endswith("linux"):
             seconds_idle = int(int(subprocess.getoutput('xprintidle')) / 1000)
-            self.minutes_idle = math.floor(seconds_idle / 60)
-            print(f"Idle time: {self.minutes_idle}m {seconds_idle}s ")
+            minutes_idle = math.floor(seconds_idle / 60)
+            self.current_minutes_idle = minutes_idle
+            self.consoleTextArea.setPlainText(f"Current idle time: {self.current_minutes_idle}m")
         else:
-            print(f"Idle time not yet implemented in {os_name}")
+            self.consoleTextArea.setPlainText(f"Idle time not yet implemented in {os_name}")
 
 
     def increment_idle_time(self):
-        self.idleTime.setTime(self.idleTime.time().addSecs(60))
+        if (self.current_minutes_idle >= self.idle_threshold):
+            self.total_minutes_idle += 1
+            print(f"total minutes idle now {self.total_minutes_idle}")
+            idle_str = str(timedelta(minutes=self.total_minutes_idle))[:-3]
+            self.idleTime.setTime(QTime.fromString(idle_str, "h:mm"))
 
 
 if __name__ == "__main__":
