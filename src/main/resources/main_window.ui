@@ -11,14 +11,14 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>Hourly Tracker</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QTimeEdit" name="startTime">
     <property name="geometry">
      <rect>
       <x>120</x>
-      <y>40</y>
+      <y>20</y>
       <width>100</width>
       <height>41</height>
      </rect>
@@ -52,7 +52,7 @@
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>50</y>
+      <y>30</y>
       <width>61</width>
       <height>20</height>
      </rect>
@@ -71,7 +71,7 @@
     <property name="geometry">
      <rect>
       <x>120</x>
-      <y>100</y>
+      <y>80</y>
       <width>100</width>
       <height>41</height>
      </rect>
@@ -105,7 +105,7 @@
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>110</y>
+      <y>90</y>
       <width>61</width>
       <height>20</height>
      </rect>
@@ -120,12 +120,12 @@
      <string>End Time</string>
     </property>
    </widget>
-   <widget class="QLabel" name="idleTimeLabel">
+   <widget class="QLabel" name="curIdleTimeLabel">
     <property name="geometry">
      <rect>
-      <x>260</x>
-      <y>50</y>
-      <width>61</width>
+      <x>270</x>
+      <y>40</y>
+      <width>101</width>
       <height>16</height>
      </rect>
     </property>
@@ -136,18 +136,18 @@
      </font>
     </property>
     <property name="text">
-     <string>Idle Time</string>
+     <string>Current Idle Time</string>
     </property>
    </widget>
-   <widget class="QTimeEdit" name="idleTime">
+   <widget class="QTimeEdit" name="curIdleTime">
     <property name="enabled">
      <bool>true</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>320</x>
-      <y>40</y>
-      <width>100</width>
+      <x>370</x>
+      <y>30</y>
+      <width>81</width>
       <height>41</height>
      </rect>
     </property>
@@ -205,8 +205,8 @@
    <widget class="QSpinBox" name="workdayHours">
     <property name="geometry">
      <rect>
-      <x>360</x>
-      <y>100</y>
+      <x>160</x>
+      <y>130</y>
       <width>61</width>
       <height>41</height>
      </rect>
@@ -218,15 +218,15 @@
      </font>
     </property>
     <property name="value">
-     <number>8</number>
+     <number>9</number>
     </property>
    </widget>
    <widget class="QLabel" name="workdayHoursLabel">
     <property name="geometry">
      <rect>
-      <x>260</x>
-      <y>110</y>
-      <width>101</width>
+      <x>50</x>
+      <y>140</y>
+      <width>91</width>
       <height>20</height>
      </rect>
     </property>
@@ -249,6 +249,9 @@
       <height>141</height>
      </rect>
     </property>
+    <property name="readOnly">
+     <bool>true</bool>
+    </property>
    </widget>
    <widget class="QLabel" name="consoleLabel">
     <property name="geometry">
@@ -267,6 +270,126 @@
     </property>
     <property name="text">
      <string>Console Log</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="idleThresholdLabel">
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>140</y>
+      <width>111</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Idle Threshold (m)</string>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="idleThreshold">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>130</y>
+      <width>61</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="value">
+     <number>20</number>
+    </property>
+   </widget>
+   <widget class="QLabel" name="totalIdleTimeLabel">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>90</y>
+      <width>101</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Total Idle Time</string>
+    </property>
+   </widget>
+   <widget class="QTimeEdit" name="totalIdleTime">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>80</y>
+      <width>81</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>30</width>
+      <height>0</height>
+     </size>
+    </property>
+    <property name="maximumSize">
+     <size>
+      <width>100</width>
+      <height>16777215</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
+    </property>
+    <property name="buttonSymbols">
+     <enum>QAbstractSpinBox::NoButtons</enum>
+    </property>
+    <property name="dateTime">
+     <datetime>
+      <hour>0</hour>
+      <minute>0</minute>
+      <second>0</second>
+      <year>2000</year>
+      <month>1</month>
+      <day>1</day>
+     </datetime>
+    </property>
+    <property name="maximumTime">
+     <time>
+      <hour>23</hour>
+      <minute>59</minute>
+      <second>59</second>
+     </time>
+    </property>
+    <property name="currentSection">
+     <enum>QDateTimeEdit::HourSection</enum>
+    </property>
+    <property name="displayFormat">
+     <string notr="true">hh:mm</string>
+    </property>
+    <property name="timeSpec">
+     <enum>Qt::LocalTime</enum>
     </property>
    </widget>
   </widget>

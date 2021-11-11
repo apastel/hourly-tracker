@@ -1,4 +1,5 @@
 from PyQt5.QtCore import QTime, QTimer
+from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from ui_form import Ui_MainWindow
 
@@ -18,17 +19,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         super().__init__()
 
         self._cur_minutes_idle = 0
-        self.idle_threshold = 20
         self._callbacks = []
-        self.setWindowTitle("Hourly Tracker")
-        self.setupUi(self)
         self.total_minutes_idle = 0
+        self.is_idle = False
+        self.setupUi(self)
         self.startTime.setTime(self.get_login_time())
         self.update_end_time()
         self.startTime.timeChanged.connect(self.update_end_time)
-        self.idleTime.timeChanged.connect(self.update_end_time)
+        self.totalIdleTime.timeChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.update_end_time)
-        self.idleTime.setDisplayFormat("h'h' mm'm'")
+        self.curIdleTime.setDisplayFormat("h'h' mm'm' ss's'")
+        self.totalIdleTime.setDisplayFormat("h'h' mm'm'")
 
 
     @property
@@ -66,7 +67,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def update_end_time(self):
         workHours = self.workdayHours.value()
-        idle_seconds = self.idleTime.time().hour() * 3600 + self.idleTime.time().minute() * 60
+        idle_seconds = self.totalIdleTime.time().hour() * 3600 + self.totalIdleTime.time().minute() * 60
         self.endTime.setTime(self.startTime.time().addSecs(workHours * 3600).addSecs(idle_seconds))
 
 
@@ -75,25 +76,45 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             seconds_idle = int(int(subprocess.getoutput('xprintidle')) / 1000)
             minutes_idle = math.floor(seconds_idle / 60)
             self.current_minutes_idle = minutes_idle
-            self.consoleTextArea.setPlainText(f"Current idle time: {self.current_minutes_idle}m")
+            if self.current_minutes_idle == 0 and self.is_idle:
+                self.consoleTextArea.appendPlainText(f"User returned from idle at {datetime.now().strftime('%I:%M')}")
+                self.is_idle = False
+            idle_str = str(timedelta(seconds=seconds_idle))
+            self.curIdleTime.setTime(QTime.fromString(idle_str, "h:mm:ss"))
         else:
-            self.consoleTextArea.setPlainText(f"Idle time not yet implemented in {os_name}")
+            print("Not yet implemented")
 
 
     def increment_idle_time(self):
-        if (self.current_minutes_idle >= self.idle_threshold):
-            self.total_minutes_idle += 1
-            print(f"total minutes idle now {self.total_minutes_idle}")
+        if (self.current_minutes_idle >= self.idleThreshold.value()):
+            if not self.is_idle:
+                self.consoleTextArea.appendPlainText(f"User has been idle since {(datetime.now() - timedelta(minutes=self.current_minutes_idle)).strftime('%I:%M')}")
+                self.total_minutes_idle += self.current_minutes_idle
+            else:
+                self.total_minutes_idle += 1
+            self.is_idle = True
             idle_str = str(timedelta(minutes=self.total_minutes_idle))[:-3]
-            self.idleTime.setTime(QTime.fromString(idle_str, "h:mm"))
+            self.totalIdleTime.setTime(QTime.fromString(idle_str, "h:mm"))
+
+
+    def check_workday_complete(self):
+        now = QTime().currentTime()
+        if now >= self.endTime.time():
+            self.consoleTextArea.appendPlainText(f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!")
+            idle_timer.stop()
+            finished_timer.stop()
+            self.curIdleTime.setTime(QTime(0, 0))
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     window.register_callback(window.increment_idle_time)
-    timer = QTimer()
-    timer.timeout.connect(window.check_idle_time)
-    timer.start(1000)
+    idle_timer = QTimer()
+    finished_timer = QTimer()
+    idle_timer.timeout.connect(window.check_idle_time)
+    finished_timer.timeout.connect(window.check_workday_complete)
+    idle_timer.start(1000)
+    finished_timer.start(1000)
     window.show()
     sys.exit(app.exec_())
