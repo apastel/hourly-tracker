@@ -77,7 +77,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             minutes_idle = math.floor(seconds_idle / 60)
             self.current_minutes_idle = minutes_idle
             if self.current_minutes_idle == 0 and self.is_idle:
-                self.consoleTextArea.appendPlainText(f"User returned from idle at {datetime.now().strftime('%I:%M')}")
+                self.consoleTextArea.appendPlainText(f"User returned from idle at {datetime.now().strftime('%I:%M %p')}")
                 self.is_idle = False
             idle_str = str(timedelta(seconds=seconds_idle))
             self.curIdleTime.setTime(QTime.fromString(idle_str, "h:mm:ss"))
@@ -88,7 +88,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def increment_idle_time(self):
         if (self.current_minutes_idle >= self.idleThreshold.value()):
             if not self.is_idle:
-                self.consoleTextArea.appendPlainText(f"User has been idle since {(datetime.now() - timedelta(minutes=self.current_minutes_idle)).strftime('%I:%M')}")
+                self.consoleTextArea.appendPlainText(f"User has been idle since {(datetime.now() - timedelta(minutes=self.current_minutes_idle)).strftime('%I:%M %p')}")
                 self.total_minutes_idle += self.current_minutes_idle
             else:
                 self.total_minutes_idle += 1
