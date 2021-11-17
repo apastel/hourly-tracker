@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QTime, QTimer
+from PyQt5.QtCore import QSettings, QTime, QTimer
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from ui_form import Ui_MainWindow
@@ -10,7 +10,7 @@ os_name = platform.uname()[0].lower()
 if os_name == "windows":
     import win32net
     import win32api
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import subprocess
 
 
@@ -18,18 +18,34 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
 
-        self._cur_minutes_idle = 0
+        self.settings = QSettings("Axlecorp", "HourlyTracker")
+        try:
+            self.resize(self.settings.value("mainwindow/size"))
+            self.move(self.settings.value("mainwindow/pos"))
+        except:
+            pass
+
         self._callbacks = []
+        self._cur_minutes_idle = 0
         self.total_minutes_idle = 0
+        if self.settings.value("today/date", date.today()) == date.today():
+            self.total_minutes_idle = int(self.settings.value("today/total_minutes_idle", 0))
+        idle_str = str(timedelta(minutes=self.total_minutes_idle))[:-3]
         self.is_idle = False
         self.setupUi(self)
         self.startTime.setTime(self.get_login_time())
+        self.totalIdleTime.setTime(QTime.fromString(idle_str, "h:mm"))
         self.update_end_time()
         self.startTime.timeChanged.connect(self.update_end_time)
         self.totalIdleTime.timeChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.update_end_time)
+        self.endTime.timeChanged.connect(self.maybe_restart_timer)
         self.curIdleTime.setDisplayFormat("h'h' mm'm' ss's'")
         self.totalIdleTime.setDisplayFormat("h'h' mm'm'")
+
+    def closeEvent(self, event):
+        self.settings.setValue("mainwindow/size", self.size())
+        self.settings.setValue("mainwindow/pos", self.pos())
 
 
     @property
@@ -59,8 +75,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             first_login_time = datetime.fromtimestamp(user["last_logon"])
         elif os_name.endswith("linux"):
             cmd = "last -R $USER -s 00:00 | perl -ne 'print unless /wtmp\sbegins/ || /^$/' | awk 'END {print $6}'"
-            first_login_time = subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.partition('\n')[0]
-            first_login_time = datetime.strptime(first_login_time, '%H:%M')
+            first_login_time = subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.partition("\n")[0]
+            first_login_time = datetime.strptime(first_login_time, "%H:%M")
 
         return QTime(first_login_time.hour, first_login_time.minute)
 
@@ -73,7 +89,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def check_idle_time(self):
         if os_name.endswith("linux"):
-            seconds_idle = int(int(subprocess.getoutput('xprintidle')) / 1000)
+            seconds_idle = int(int(subprocess.getoutput("xprintidle")) / 1000)
             minutes_idle = math.floor(seconds_idle / 60)
             self.current_minutes_idle = minutes_idle
             if self.current_minutes_idle == 0 and self.is_idle:
@@ -95,6 +111,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.is_idle = True
             idle_str = str(timedelta(minutes=self.total_minutes_idle))[:-3]
             self.totalIdleTime.setTime(QTime.fromString(idle_str, "h:mm"))
+            self.settings.setValue("today/date", date.today())
+            self.settings.setValue("today/total_minutes_idle", self.total_minutes_idle)
 
 
     def check_workday_complete(self):
@@ -104,6 +122,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             idle_timer.stop()
             finished_timer.stop()
             self.curIdleTime.setTime(QTime(0, 0))
+
+
+    def maybe_restart_timer(self):
+        if not idle_timer.isActive():
+            idle_timer.start(1000)
+        if not finished_timer.isActive:
+            finished_timer.start(1000)
 
 
 if __name__ == "__main__":
