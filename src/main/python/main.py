@@ -71,8 +71,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_login_time(self):
         if os_name == "windows":
-            user = win32net.NetUserGetInfo(None,win32api.GetUserName(),2)
-            first_login_time = datetime.fromtimestamp(user["last_logon"])
+            system_startup_time = " ".join(subprocess.run("net statistics workstation | FINDSTR \"statistics since\"", shell=True, capture_output=True, text=True).stdout.split(" ")[-2:]).strip()
+            first_login_time = datetime.strptime(system_startup_time, "%I:%M:%S %p")
         elif os_name.endswith("linux"):
             cmd = "last -R $USER -s 00:00 | perl -ne 'print unless /wtmp\sbegins/ || /^$/' | awk 'END {print $6}'"
             first_login_time = subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.partition("\n")[0]
