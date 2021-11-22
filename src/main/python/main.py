@@ -2,6 +2,7 @@ from PyQt5.QtCore import QSettings, QTime, QTimer
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from ui_form import Ui_MainWindow
+from fbs_runtime.application_context.PyQt5 import ApplicationContext
 
 import sys
 import platform
@@ -75,7 +76,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             first_login_time = datetime.strptime(system_startup_time, "%I:%M:%S %p")
         elif os_name.endswith("linux"):
             cmd = "last -R $USER -s 00:00 | perl -ne 'print unless /wtmp\sbegins/ || /^$/' | awk 'END {print $6}'"
-            first_login_time = subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.partition("\n")[0]
+            first_login_time = subprocess.getoutput(cmd).partition("\n")[0]
             first_login_time = datetime.strptime(first_login_time, "%H:%M")
 
         return QTime(first_login_time.hour, first_login_time.minute)
@@ -132,7 +133,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    appctxt = ApplicationContext()
     window = MainWindow()
     window.register_callback(window.increment_idle_time)
     idle_timer = QTimer()
@@ -142,4 +143,4 @@ if __name__ == "__main__":
     idle_timer.start(1000)
     finished_timer.start(1000)
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(appctxt.app.exec_())
