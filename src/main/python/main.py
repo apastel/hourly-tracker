@@ -1,18 +1,18 @@
-from PyQt5.QtCore import QSettings, QTime, QTimer
-from PyQt5.QtGui import QTextCursor
-from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtCore import QObject, QSettings, QTime, QTimer
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QAction, QMainWindow, QMenu, QSystemTrayIcon
 from ui_form import Ui_MainWindow
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
+from datetime import date, datetime, timedelta
 
 import sys
 import platform
 import math
+import subprocess
 os_name = platform.uname()[0].lower()
 if os_name == "windows":
     import win32net
     import win32api
-from datetime import date, datetime, timedelta
-import subprocess
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -41,12 +41,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.totalIdleTime.timeChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.update_end_time)
         self.endTime.timeChanged.connect(self.maybe_restart_timer)
+        self.endTime.timeChanged.connect(self.update_tooltip)
         self.curIdleTime.setDisplayFormat("h'h' mm'm' ss's'")
         self.totalIdleTime.setDisplayFormat("h'h' mm'm'")
 
     def closeEvent(self, event):
+        event.ignore()
         self.settings.setValue("mainwindow/size", self.size())
         self.settings.setValue("mainwindow/pos", self.pos())
+        self.hide()
+        tray.showMessage(
+            "Tray Program",
+            "Application was minimized to Tray",
+            QSystemTrayIcon.Information,
+            2000
+        )
 
 
     @property
@@ -120,6 +129,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         now = QTime().currentTime()
         if now >= self.endTime.time():
             self.consoleTextArea.appendPlainText(f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!")
+            tray.showMessage(
+                "Hourly Tracker",
+                f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!",
+                QSystemTrayIcon.Information,
+                15000
+            )
             idle_timer.stop()
             finished_timer.stop()
             self.curIdleTime.setTime(QTime(0, 0))
@@ -132,6 +147,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             finished_timer.start(1000)
 
 
+    def tray_icon_clicked(self, reason):
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show()
+
+
+    def get_time_remaining(self):
+        return self.endTime.time().toString('h:mm AP')
+
+
+    def update_tooltip(self):
+        tray.setToolTip(f"Hourly Tracker: End Time {self.get_time_remaining()}")
+
 if __name__ == "__main__":
     appctxt = ApplicationContext()
     window = MainWindow()
@@ -142,5 +169,17 @@ if __name__ == "__main__":
     finished_timer.timeout.connect(window.check_workday_complete)
     idle_timer.start(1000)
     finished_timer.start(1000)
+
+    tray = QSystemTrayIcon()
+    tray.setIcon(QIcon("src/main/icons/base/24.png"))
+    tray.activated.connect(window.tray_icon_clicked)
+    quit = QAction("Quit")
+    quit.triggered.connect(appctxt.app.quit)
+    menu = QMenu()
+    menu.addAction(quit)
+    tray.setContextMenu(menu)
+    tray.setToolTip(f"Hourly Tracker: End Time {window.get_time_remaining()}")
+    tray.show()
+
     window.show()
     sys.exit(appctxt.app.exec_())
