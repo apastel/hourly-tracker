@@ -36,10 +36,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.startTime.setTime(self.get_login_time())
         self.totalIdleTime.setTime(QTime.fromString(idle_str, "h:mm"))
+        self.workdayHours.setValue(int(self.settings.value("settings/workday_hours", 9)))
+        self.idleThreshold.setValue(int(self.settings.value("settings/idle_threshold", 20)))
         self.update_end_time()
         self.startTime.timeChanged.connect(self.update_end_time)
         self.totalIdleTime.timeChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.update_end_time)
+        self.workdayHours.valueChanged.connect(self.save_settings)
+        self.idleThreshold.valueChanged.connect(self.save_settings)
         self.endTime.timeChanged.connect(self.maybe_restart_timer)
         self.endTime.timeChanged.connect(self.update_tooltip)
         self.curIdleTime.setDisplayFormat("h'h' mm'm' ss's'")
@@ -158,6 +162,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def update_tooltip(self):
         tray.setToolTip(f"Hourly Tracker: End Time {self.get_time_remaining()}")
+
+
+    def save_settings(self):
+        self.settings.setValue("settings/workday_hours", self.workdayHours.value())
+        self.settings.setValue("settings/idle_threshold", self.idleThreshold.value())
+
 
 if __name__ == "__main__":
     appctxt = ApplicationContext()
