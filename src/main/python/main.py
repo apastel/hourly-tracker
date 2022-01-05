@@ -147,8 +147,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def maybe_restart_timer(self):
         if not idle_timer.isActive():
             idle_timer.start(1000)
-        if not finished_timer.isActive:
+        if not finished_timer.isActive():
             finished_timer.start(1000)
+            self.consoleTextArea.appendPlainText("Restarted workday tracking...")
 
 
     def tray_icon_clicked(self, reason):
