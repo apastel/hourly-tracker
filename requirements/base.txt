@@ -1,3 +1,7 @@
 wheel
 fbs
 PyQt5==5.9.2
+pre-commit
+flake8
+flake8-bugbear
+flake8-implicit-str-concat
