@@ -17,11 +17,11 @@
 fbs freeze
 fbs installer
 ```
-Free version of fbs does not support Linux without downgrading to PyQt5==5.9.2 (which requires Python 3.5/3.6)
+Free version of fbs does not support Linux without downgrading to PyQt5 (which requires Python 3.5/3.6)
 ## Todo
-* ~~Notification when workday completes~~
-* ~~Save "workday hours" and "idle threshold" to settings~~
-* App icon
+* Bug: App closes sometimes when right-clicking system tray icon
 * Windows: actually track idle time
 * Bug: idle time resets on linux when music playing in browser tab
 * ~~When workday completes, then user increases workday hours to resume idle checking, then decreases hours back to completion, need to stop timer again~~
+* ~~Notification when workday completes~~
+* ~~Save "workday hours" and "idle threshold" to settings~~

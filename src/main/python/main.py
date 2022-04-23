@@ -183,7 +183,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.consoleTextArea.appendPlainText("Restarted workday tracking...")
 
     def tray_icon_clicked(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
+        if reason == QSystemTrayIcon.Trigger:
             self.show()
 
     def get_time_remaining(self):
@@ -209,7 +209,8 @@ if __name__ == "__main__":
     finished_timer.start(1000)
 
     tray = QSystemTrayIcon()
-    tray.setIcon(QIcon("src/main/icons/base/24.png"))
+
+    tray.setIcon(QIcon(appctxt.get_resource("clock.png")))
     tray.activated.connect(window.tray_icon_clicked)
     quit = QAction("Quit")
     quit.triggered.connect(appctxt.app.quit)
