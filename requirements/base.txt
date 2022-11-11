@@ -1,7 +1,5 @@
-wheel
-fbs
-PyQt5
-pre-commit
+./fbs_pro-1.1.3.tar.gz
+PySide6
 flake8
 flake8-bugbear
 flake8-implicit-str-concat

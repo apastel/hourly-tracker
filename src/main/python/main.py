@@ -6,19 +6,21 @@ from datetime import date
 from datetime import datetime
 from datetime import timedelta
 
-from fbs_runtime.application_context.PyQt5 import ApplicationContext
-from PyQt5.QtCore import QSettings
-from PyQt5.QtCore import QTime
-from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction
-from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtWidgets import QMenu
-from PyQt5.QtWidgets import QSystemTrayIcon
-from ui_form import Ui_MainWindow
+from fbs.builtin_commands import is_linux
+from fbs.builtin_commands import is_windows
+from fbs_runtime.application_context.PySide6 import ApplicationContext
+from generated.ui_form import Ui_MainWindow
+from PySide6.QtCore import QSettings
+from PySide6.QtCore import QTime
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QAction
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QMenu
+from PySide6.QtWidgets import QSystemTrayIcon
 
 os_name = platform.uname()[0].lower()
-# if os_name == "windows":
+# if is_windows():
 #     import win32net
 #     import win32api
 
@@ -93,7 +95,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._callbacks.append(callback)
 
     def get_login_time(self):
-        if os_name == "windows":
+        if is_windows():
             system_startup_time = " ".join(
                 subprocess.run(
                     'net statistics workstation | FINDSTR "statistics since"',
@@ -103,7 +105,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 ).stdout.split(" ")[-2:]
             ).strip()
             first_login_time = datetime.strptime(system_startup_time, "%I:%M:%S %p")
-        elif os_name.endswith("linux"):
+        elif is_linux():
             last_cmd = "last -R $USER -s 00:00"
             perl_cmd = r"perl -ne 'print unless /wtmp\sbegins/ || /^$/'"
             awk_cmd = "awk 'END {print $6}'"
@@ -221,4 +223,4 @@ if __name__ == "__main__":
     tray.show()
 
     window.show()
-    sys.exit(appctxt.app.exec_())
+    sys.exit(appctxt.app.exec())

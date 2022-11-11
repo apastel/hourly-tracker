@@ -89,3 +89,6 @@ venv*/
 .venv*/
 
 .vscode
+fbs_pro*
+secret.json
+sign/
