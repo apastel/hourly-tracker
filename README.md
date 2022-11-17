@@ -37,6 +37,10 @@ fbs runvm ubuntu
 # In the Ubuntu virtual machine:
 fbs release
 ```
+* Having to make several changes to get release to work
+  * Ubuntu Dockerfile: `fpm -v 1.15.0`, `COPY *.tar.gz /tmp/requirements`
+  * Uses python 3.6 which is old and /fbs/freeze/__init__.py uses subprocess.run() params not in 3.6
+    * Attempting to use python 3.10.8 instead but python ssl extension error
 
 ## Todo
 * Bug: App closes sometimes when right-clicking system tray icon

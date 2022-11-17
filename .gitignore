@@ -89,6 +89,7 @@ venv*/
 .venv*/
 
 .vscode
-fbs_pro*
+fbs*.tar.gz
 secret.json
 sign/
+*.log
