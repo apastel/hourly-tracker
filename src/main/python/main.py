@@ -1,11 +1,14 @@
+import logging
 import math
-import platform
+import os
 import subprocess
 import sys
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
+from pathlib import Path
 
+from appdirs import user_log_dir
 from fbs.builtin_commands import is_linux
 from fbs.builtin_commands import is_windows
 from fbs_runtime.application_context.PySide6 import ApplicationContext
@@ -19,10 +22,18 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMenu
 from PySide6.QtWidgets import QSystemTrayIcon
 
-os_name = platform.uname()[0].lower()
-# if is_windows():
-#     import win32net
-#     import win32api
+APP_DATA_DIR = user_log_dir("HourlyTracker", "Axlecorp")
+os.makedirs(Path(APP_DATA_DIR), exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler(Path(APP_DATA_DIR) / "hourly-tracker.log"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -126,7 +137,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def check_idle_time(self):
-        if os_name.endswith("linux"):
+        if is_linux():
             seconds_idle = int(int(subprocess.getoutput("xprintidle")) / 1000)
             minutes_idle = math.floor(seconds_idle / 60)
             self.current_minutes_idle = minutes_idle
