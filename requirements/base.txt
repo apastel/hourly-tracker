@@ -1,4 +1,6 @@
-./fbs_pro-1.1.3.tar.gz
+appdirs
+boto3
+./fbs_pro-1.1.3-apastel.tar.gz
 PySide6
 flake8
 flake8-bugbear
