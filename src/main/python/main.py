@@ -138,8 +138,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def check_idle_time(self):
         if is_linux():
-            seconds_idle = int(int(subprocess.getoutput("xprintidle")) / 1000)
-            minutes_idle = math.floor(seconds_idle / 60)
+            # xprintidle doesn't work on wayland
+            # seconds_idle = int(int(subprocess.getoutput("xprintidle")) / 1000)
+
+            idle_cmd = "dbus-send --print-reply --dest=org.gnome.Mutter.IdleMonitor /org/gnome/Mutter/IdleMonitor/Core org.gnome.Mutter.IdleMonitor.GetIdletime"
+            idle_result = subprocess.Popen(["/bin/bash", "-c", idle_cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+            millis_idle = int(idle_result.communicate()[0].rsplit(None,1)[-1])
+            seconds_idle = int(millis_idle / 1000)
+            minutes_idle = math.floor(millis_idle / 1000 / 60)
+            
             self.current_minutes_idle = minutes_idle
             if self.current_minutes_idle == 0 and self.is_idle:
                 self.consoleTextArea.appendPlainText(
