@@ -2,7 +2,13 @@
 
 ### Install packages
 ```
-(inside venv)
+sudo apt install libcairo2-dev libgirepository1.0-dev
+
+# Now `fpm` is needed by fbs installer for some reason
+sudo apt install ruby-full
+sudo gem install fpm
+
+# (inside venv)
 pip install -r requirements/linux.txt
 ```
 
