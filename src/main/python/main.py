@@ -10,6 +10,7 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 
+import login_time
 from appdirs import user_log_dir
 from fbs.builtin_commands import is_linux
 from fbs.builtin_commands import is_windows
@@ -91,12 +92,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.settings.setValue("mainwindow/size", self.size())
         self.settings.setValue("mainwindow/pos", self.pos())
         self.hide()
-        tray.showMessage(
-            "Tray Program",
-            "Application was minimized to Tray",
-            QSystemTrayIcon.Information,
-            2000,
-        )
 
     @property
     def current_minutes_idle(self):
@@ -117,15 +112,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_login_time(self):
         if is_windows():
-            system_startup_time = " ".join(
-                subprocess.run(
-                    'net statistics workstation | FINDSTR "statistics since"',
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                ).stdout.split(" ")[-2:]
-            ).strip()
-            first_login_time = datetime.strptime(system_startup_time, "%I:%M:%S %p")
+            first_login_time = login_time.get_or_update_first_login_today(self)
         elif is_linux():
             last_cmd = "last -R $USER -s 00:00"
             perl_cmd = r"perl -ne 'print unless /wtmp\sbegins/ || /^$/'"
