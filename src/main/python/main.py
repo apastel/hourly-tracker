@@ -1,3 +1,5 @@
+import ctypes
+import ctypes.wintypes as wintypes
 import logging
 import math
 import os
@@ -8,7 +10,6 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 
-import gi
 from appdirs import user_log_dir
 from fbs.builtin_commands import is_linux
 from fbs.builtin_commands import is_windows
@@ -23,12 +24,16 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMenu
 from PySide6.QtWidgets import QSystemTrayIcon
 
-gi.require_version("Notify", "0.7")
-from gi.repository import Notify  # noqa: E402
-
 APP_DATA_DIR = user_log_dir("HourlyTracker", "Axlecorp")
 os.makedirs(Path(APP_DATA_DIR), exist_ok=True)
-Notify.init("HourlyTracker")
+
+if is_linux():
+    import gi
+
+    gi.require_version("Notify", "0.7")
+    from gi.repository import Notify  # noqa: E402
+
+    Notify.init("HourlyTracker")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -160,16 +165,28 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             seconds_idle = int(millis_idle / 1000)
             minutes_idle = math.floor(millis_idle / 1000 / 60)
 
-            self.current_minutes_idle = minutes_idle
-            if self.current_minutes_idle == 0 and self.is_idle:
-                self.consoleTextArea.appendPlainText(
-                    f"User returned from idle at {datetime.now().strftime('%I:%M %p')}"
-                )
-                self.is_idle = False
-            idle_str = str(timedelta(seconds=seconds_idle))
-            self.curIdleTime.setTime(QTime.fromString(idle_str, "h:mm:ss"))
-        else:
-            print("Not yet implemented")
+        elif is_windows():
+
+            class LASTINPUTINFO(ctypes.Structure):
+                _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+            lii = LASTINPUTINFO()
+            lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+
+            if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                millis_idle = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
+                seconds_idle = millis_idle // 1000
+                minutes_idle = seconds_idle // 60
+
+        self.current_minutes_idle = minutes_idle
+        if self.current_minutes_idle == 0 and self.is_idle:
+            self.consoleTextArea.appendPlainText(
+                f"User returned from idle at {datetime.now().strftime('%I:%M %p')}"
+            )
+            self.is_idle = False
+
+        idle_str = str(timedelta(seconds=seconds_idle))
+        self.curIdleTime.setTime(QTime.fromString(idle_str, "h:mm:ss"))
 
     def increment_idle_time(self):
         if self.current_minutes_idle >= self.idleThreshold.value():
@@ -195,8 +212,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if now >= self.endTime.time():
             message = f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!"
             self.consoleTextArea.appendPlainText(message)
-            notification = Notify.Notification.new("Hourly Tracker", message, None)
-            notification.show()
+            if is_linux():
+                notification = Notify.Notification.new("Hourly Tracker", message, None)
+                notification.show()
             idle_timer.stop()
             finished_timer.stop()
             self.curIdleTime.setTime(QTime(0, 0))

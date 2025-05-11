@@ -1,21 +1,21 @@
 exclude: ^src/main/python/generated/
 repos:
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.2.2
+    rev: v3.19.1
     hooks:
       - id: pyupgrade
         args: ["--py36-plus"]
   - repo: https://github.com/asottile/reorder_python_imports
-    rev: v3.9.0
+    rev: v3.14.0
     hooks:
       - id: reorder-python-imports
         args: ["--application-directories", "src"]
   - repo: https://github.com/psf/black
-    rev: 22.10.0
+    rev: 25.1.0
     hooks:
       - id: black
   - repo: https://github.com/pycqa/flake8
-    rev: 5.0.4
+    rev: 7.2.0
     hooks:
       - id: flake8
         args: ['--max-line-length', '120']
@@ -23,7 +23,7 @@ repos:
           - flake8-bugbear
           - flake8-implicit-str-concat
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.3.0
+    rev: v5.0.0
     hooks:
       - id: check-byte-order-marker
       - id: trailing-whitespace

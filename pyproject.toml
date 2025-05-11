@@ -1,0 +1,30 @@
+[project]
+name = "hourlyTracker"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "apastel", email = "alex.r.pastel@gmail.com"},
+]
+dependencies = ["appdirs>=1.4.4", "pywin32>=310"]
+requires-python = "<=3.13,>=3.9"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
+
+[dependency-groups]
+gui = [
+    "PySide6>=6.9.0",
+    "file:///${PROJECT_ROOT}/fbs_pro-1.2.1.tar.gz",
+]
+lint = [
+    "flake8>=7.2.0",
+    "black>=25.1.0",
+    "pre-commit>=4.2.0",
+]
+
+[tool.pdm.scripts]
+# Change directory to project root and run fbs with all arguments
+fbs = "fbs"

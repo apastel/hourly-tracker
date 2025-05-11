@@ -1,7 +1,0 @@
-appdirs
-boto3
-./fbs_pro-1.2.1.tar.gz
-PySide6
-flake8
-flake8-bugbear
-flake8-implicit-str-concat

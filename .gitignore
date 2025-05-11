@@ -93,3 +93,6 @@ fbs*.tar.gz
 secret.json
 sign/
 *.log
+.idea
+
+.pdm-python
