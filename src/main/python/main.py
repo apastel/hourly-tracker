@@ -16,6 +16,7 @@ from fbs.builtin_commands import is_linux
 from fbs.builtin_commands import is_windows
 from fbs_runtime.application_context.PySide6 import ApplicationContext
 from generated.ui_form import Ui_MainWindow
+from plyer import notification
 from PySide6.QtCore import QSettings
 from PySide6.QtCore import QTime
 from PySide6.QtCore import QTimer
@@ -27,14 +28,6 @@ from PySide6.QtWidgets import QSystemTrayIcon
 
 APP_DATA_DIR = user_log_dir("HourlyTracker", "Axlecorp")
 os.makedirs(Path(APP_DATA_DIR), exist_ok=True)
-
-if is_linux():
-    import gi
-
-    gi.require_version("Notify", "0.7")
-    from gi.repository import Notify  # noqa: E402
-
-    Notify.init("HourlyTracker")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -199,9 +192,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if now >= self.endTime.time():
             message = f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!"
             self.consoleTextArea.appendPlainText(message)
-            if is_linux():
-                notification = Notify.Notification.new("Hourly Tracker", message, None)
-                notification.show()
+            notification.notify(
+                title="Hourly Tracker",
+                message=message,
+                app_name="HourlyTracker",
+                timeout=5,  # seconds (ignored on Windows)
+            )
             idle_timer.stop()
             finished_timer.stop()
             self.curIdleTime.setTime(QTime(0, 0))
