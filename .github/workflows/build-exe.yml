@@ -1,0 +1,81 @@
+# This workflow builds and tests the Windows installer for Hourly Tracker.
+
+name: Build and Verify (Windows)
+
+on:
+  push:
+    branches: # prevent push on tags since that's handled by another workflow
+      - '**'
+    paths-ignore:
+      - '**.md'
+      - '.flake8'
+      - '.gitignore'
+      - '.pre-commit-comfig.yaml'
+      - '**/build-deb.yml'
+      - '**/build-dmg.yml'
+      - '**/pytest.yml'
+      - '**/release.yml'
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+  schedule:
+    - cron: '0 10 * * *'
+
+concurrency:
+  group: build-exe
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      installer-version: ${{ steps.json-properties.outputs.version }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: pdm-project/setup-pdm@v4
+    - name: Download fbs
+      env:
+        FBS_URL_ID: ${{ secrets.FBS_URL_ID }}
+      run: |
+        curl -L https://drive.google.com/uc?id=$FBS_URL_ID --output fbs_pro-1.2.1.tar.gz
+    - name: Install dependencies
+      run: |
+        pdm install -dG gui --no-editable
+    # - name: Freeze prep
+    #   run: |
+    #     pdm freeze-prep
+    - uses: nuget/setup-nuget@v2
+    - name: Install C++ Redist
+      shell: pwsh
+      run: |
+        Install-Module -Name VcRedist -Force
+        New-Item -Path C:\Temp\VcRedist -ItemType Directory
+        $VcList = Get-VcList -Export All | Where-Object { $_.Release -in "2010","2012" -and $_.Architecture -eq "x64" }
+        Save-VcRedist -VcList $VcList -Path C:\Temp\VcRedist
+        Install-VcRedist -VcList $VcList -Silent
+    - name: Freeze exe
+      run: |
+        pdm fbs freeze
+    - name: Create installer
+      run: |
+        pdm fbs installer
+    - name: Get base.json file
+      id: json-properties
+      uses: zoexx/github-action-json-file-properties@1.0.6
+      with:
+        file_path: src/build/settings/base.json
+    - name: Save .exe as artifact
+      id: upload_exe
+      uses: actions/upload-artifact@v4
+      with:
+        name: installer-exe
+        path: ./target/HourlyTracker-${{ steps.json-properties.outputs.version }}-Windows-Installer.exe

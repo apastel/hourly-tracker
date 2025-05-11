@@ -1,6 +1,14 @@
 # Hourly Tracker
 
 ### Install packages
+
+Windows
+```
+# Install PDM first, then run
+pdm install
+```
+
+Linux
 ```
 sudo apt install libcairo2-dev libgirepository1.0-dev
 
@@ -8,8 +16,8 @@ sudo apt install libcairo2-dev libgirepository1.0-dev
 sudo apt install ruby-full
 sudo gem install fpm
 
-# (inside venv)
-pip install -r requirements/linux.txt
+# Install PDM first, then run:
+pdm install
 ```
 
 ### Install pre-commit
@@ -24,13 +32,13 @@ pyside6-uic -o src/main/python/ui_form.py src/main/resources/main_window.ui
 
 ### Test
 ```
-fbs run
+pdm fbs run
 ```
 
 ### Build package:
 ```
-fbs freeze
-fbs installer
+pdm fbs freeze
+pdm fbs installer
 ```
 
 ### Release:
