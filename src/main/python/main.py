@@ -10,11 +10,10 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 
+import appdirs
+import fbs.builtin_commands
+import fbs_runtime.application_context.PySide6
 import login_time
-from appdirs import user_log_dir
-from fbs.builtin_commands import is_linux
-from fbs.builtin_commands import is_windows
-from fbs_runtime.application_context.PySide6 import ApplicationContext
 from generated.ui_form import Ui_MainWindow
 from plyer import notification
 from PySide6.QtCore import QSettings
@@ -26,7 +25,7 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMenu
 from PySide6.QtWidgets import QSystemTrayIcon
 
-APP_DATA_DIR = user_log_dir("HourlyTracker", "Axlecorp")
+APP_DATA_DIR = appdirs.user_log_dir(fbs_runtime.PUBLIC_SETTINGS["app_name"], "Axlecorp")
 os.makedirs(Path(APP_DATA_DIR), exist_ok=True)
 
 logging.basicConfig(
@@ -44,7 +43,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
 
-        self.settings = QSettings("Axlecorp", "HourlyTracker")
+        self.settings = QSettings("Axlecorp", fbs_runtime.PUBLIC_SETTINGS["app_name"])
         try:
             self.resize(self.settings.value("mainwindow/size"))
             self.move(self.settings.value("mainwindow/pos"))
@@ -104,9 +103,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._callbacks.append(callback)
 
     def get_login_time(self):
-        if is_windows():
+        if fbs.builtin_commands.is_windows():
             first_login_time = login_time.get_or_update_first_login_today(self)
-        elif is_linux():
+        elif fbs.builtin_commands.is_linux():
             last_cmd = "last -R $USER -s 00:00"
             perl_cmd = r"perl -ne 'print unless /wtmp\sbegins/ || /^$/'"
             awk_cmd = "awk 'END {print $6}'"
@@ -127,7 +126,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def check_idle_time(self):
-        if is_linux():
+        if fbs.builtin_commands.is_linux():
             # xprintidle doesn't work on wayland
             # seconds_idle = int(int(subprocess.getoutput("xprintidle")) / 1000)
 
@@ -145,7 +144,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             seconds_idle = int(millis_idle / 1000)
             minutes_idle = math.floor(millis_idle / 1000 / 60)
 
-        elif is_windows():
+        elif fbs.builtin_commands.is_windows():
 
             class LASTINPUTINFO(ctypes.Structure):
                 _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
@@ -198,7 +197,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             notification.notify(
                 title="Hourly Tracker",
                 message=message,
-                app_name="HourlyTracker",
+                app_name=fbs_runtime.PUBLIC_SETTINGS["app_name"],
                 timeout=5,  # seconds (ignored on Windows)
             )
 
@@ -225,7 +224,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
 if __name__ == "__main__":
-    appctxt = ApplicationContext()
+    appctxt = fbs_runtime.application_context.PySide6.ApplicationContext()
     window = MainWindow()
     window.register_callback(window.increment_idle_time)
     idle_timer = QTimer()
