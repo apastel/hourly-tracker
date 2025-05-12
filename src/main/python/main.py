@@ -190,6 +190,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def check_workday_complete(self):
         now = QTime().currentTime()
         if now >= self.endTime.time():
+            idle_timer.stop()
+            finished_timer.stop()
+            self.curIdleTime.setTime(QTime(0, 0))
             message = f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!"
             self.consoleTextArea.appendPlainText(message)
             notification.notify(
@@ -198,9 +201,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 app_name="HourlyTracker",
                 timeout=5,  # seconds (ignored on Windows)
             )
-            idle_timer.stop()
-            finished_timer.stop()
-            self.curIdleTime.setTime(QTime(0, 0))
+            print("anything happenin there")
 
     def maybe_restart_timer(self):
         if not idle_timer.isActive():
