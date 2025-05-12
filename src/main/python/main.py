@@ -201,7 +201,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 app_name="HourlyTracker",
                 timeout=5,  # seconds (ignored on Windows)
             )
-            print("anything happenin there")
 
     def maybe_restart_timer(self):
         if not idle_timer.isActive():
