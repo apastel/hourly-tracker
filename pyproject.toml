@@ -5,7 +5,7 @@ description = "Default template for PDM package"
 authors = [
     {name = "apastel", email = "alex.r.pastel@gmail.com"},
 ]
-dependencies = ["appdirs>=1.4.4", "pywin32>=310", "plyer>=2.1.0"]
+dependencies = ["appdirs>=1.4.4", "pywin32>=310", "plyer>=2.1.0", "winotify>=1.1.0"]
 requires-python = "<=3.13,>=3.9"
 readme = "README.md"
 license = {text = "MIT"}

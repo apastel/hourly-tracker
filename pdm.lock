@@ -5,7 +5,7 @@
 groups = ["default", "gui", "lint"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:03968ecdc36dc243b424eed89c70a4cf51e3a56c97bf182247cb5a40d0e1ba2f"
+content_hash = "sha256:b13b41d5b02e6f5b806594a953b936dce3d62ced4aa1918e739aa92e94a30358"
 
 [[metadata.targets]]
 requires_python = ">=3.9,<=3.13"
@@ -611,6 +611,16 @@ dependencies = [
 files = [
     {file = "virtualenv-20.31.2-py3-none-any.whl", hash = "sha256:36efd0d9650ee985f0cad72065001e66d49a6f24eb44d98980f630686243cf11"},
     {file = "virtualenv-20.31.2.tar.gz", hash = "sha256:e10c0a9d02835e592521be48b332b6caee6887f332c111aa79a09b9e79efc2af"},
+]
+
+[[package]]
+name = "winotify"
+version = "1.1.0"
+summary = "Show notification toast on Windows 10"
+groups = ["default"]
+files = [
+    {file = "winotify-1.1.0-py3-none-any.whl", hash = "sha256:13aa9b1196b02ab3e699645b4407371ca73348421f8662565100d70c7cf552d9"},
+    {file = "winotify-1.1.0.tar.gz", hash = "sha256:f8a0d6ff00cb2c1b3dcdfe825431f46f6aa5dc8ce84ffc59e8fda8c7e36687fe"},
 ]
 
 [[package]]
