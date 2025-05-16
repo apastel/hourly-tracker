@@ -5,6 +5,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
@@ -29,13 +30,16 @@ APP_DATA_DIR = appdirs.user_log_dir(fbs_runtime.PUBLIC_SETTINGS["app_name"], "Ax
 os.makedirs(Path(APP_DATA_DIR), exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="[%(asctime)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
-        logging.FileHandler(Path(APP_DATA_DIR) / "hourly-tracker.log"),
+        logging.FileHandler(
+            Path(APP_DATA_DIR) / f"hourly-tracker_{time.strftime('%Y-%m-%d')}.log"
+        ),
         logging.StreamHandler(sys.stdout),
     ],
+    encoding="utf-8 ",
 )
 
 

@@ -1,4 +1,5 @@
 import datetime
+import logging
 import subprocess
 
 
@@ -29,16 +30,25 @@ def get_current_session_login_time():
 
 def get_or_update_first_login_today(self):
     today = get_today_str()
+    logging.debug(f"today: {today}")
     current_session_login_time = (
         get_current_session_login_time() or datetime.datetime.now()
     )
+    logging.debug(f"current_session_login_time: {current_session_login_time}")
 
     recorded_time = self.settings.value("today/login_time")
+    logging.debug(f"recorded_time: {recorded_time}")
     recorded_date = self.settings.value("today/date")
+    logging.debug(f"recorded_data: {recorded_date}")
     if recorded_time and recorded_date == today:
+        logging.debug("recorded_time == today")
         recorded_time = datetime.datetime.fromisoformat(recorded_time)
+        logging.debug(
+            f"min({recorded_time}, {current_session_login_time}) = {min(recorded_time, current_session_login_time)}"
+        )
         return min(recorded_time, current_session_login_time)
 
+    logging.debug("recorded_time != today, save new time")
     # Save as today's first login
     self.settings.setValue("today/login_time", current_session_login_time.isoformat())
     self.settings.setValue("today/date", today)
