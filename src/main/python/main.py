@@ -64,6 +64,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._callbacks = []
         self._cur_minutes_idle = 0
         self.total_minutes_idle = 0
+        # todo: redundant to store date separately when it's in today/login_time
         if self.settings.value("today/date", date.today()) == date.today():
             self.total_minutes_idle = int(
                 self.settings.value("today/total_minutes_idle", 0)
