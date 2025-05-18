@@ -50,9 +50,6 @@ jobs:
     - name: Install dependencies
       run: |
         pdm install -dG gui --no-editable
-    # - name: Freeze prep
-    #   run: |
-    #     pdm freeze-prep
     - uses: nuget/setup-nuget@v2
     - name: Install C++ Redist
       shell: pwsh

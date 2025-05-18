@@ -3,6 +3,7 @@ import ctypes.wintypes as wintypes
 import logging
 import math
 import os
+import pathlib
 import subprocess
 import sys
 import time
@@ -11,12 +12,14 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 
-import appdirs
 import fbs.builtin_commands
 import fbs_runtime.application_context.PySide6
 import login_time
 from generated.ui_form import Ui_MainWindow
+from PySide6.QtCore import QDate
+from PySide6.QtCore import QDateTime
 from PySide6.QtCore import QSettings
+from PySide6.QtCore import Qt
 from PySide6.QtCore import QTime
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction
@@ -25,8 +28,13 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMenu
 from PySide6.QtWidgets import QSystemTrayIcon
 
-APP_DATA_DIR = appdirs.user_log_dir(fbs_runtime.PUBLIC_SETTINGS["app_name"], "Axlecorp")
-os.makedirs(Path(APP_DATA_DIR), exist_ok=True)
+APP_DATA_PATH: pathlib.Path = (
+    pathlib.Path(os.getenv("APPDATA" if os.name == "nt" else "HOME"))
+    / fbs_runtime.PUBLIC_SETTINGS["app_name"]
+)
+LOG_DIR = Path(APP_DATA_PATH) / "Logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+NOTIF_INTERVAL_DEFAULT = 15  # minutes
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -34,7 +42,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.FileHandler(
-            Path(APP_DATA_DIR) / f"hourly-tracker_{time.strftime('%Y-%m-%d')}.log"
+            LOG_DIR / f"hourly-tracker_{time.strftime('%Y-%m-%d')}.log"
         ),
         logging.StreamHandler(sys.stdout),
     ],
@@ -46,7 +54,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
 
-        self.settings = QSettings("Axlecorp", fbs_runtime.PUBLIC_SETTINGS["app_name"])
+        self.settings = QSettings(fbs_runtime.PUBLIC_SETTINGS["app_name"])
         try:
             self.resize(self.settings.value("mainwindow/size"))
             self.move(self.settings.value("mainwindow/pos"))
@@ -59,6 +67,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.settings.value("today/date", date.today()) == date.today():
             self.total_minutes_idle = int(
                 self.settings.value("today/total_minutes_idle", 0)
+            )
+        if not self.settings.value("settings/notification_interval"):
+            self.settings.setValue(
+                "settings/notification_interval", NOTIF_INTERVAL_DEFAULT
             )
         idle_str = str(timedelta(minutes=self.total_minutes_idle))[:-3]
         self.is_idle = False
@@ -73,6 +85,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         self.update_end_time()
         self.startTime.timeChanged.connect(self.update_end_time)
+        self.startTime.timeChanged.connect(self.persist_updated_start_time)
         self.totalIdleTime.timeChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.update_end_time)
         self.workdayHours.valueChanged.connect(self.save_settings)
@@ -117,6 +130,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             first_login_time = datetime.strptime(first_login_time, "%H:%M")
 
         return QTime(first_login_time.hour, first_login_time.minute)
+
+    def persist_updated_start_time(self):
+        today = QDate.currentDate()
+        datetime = QDateTime(today, self.startTime.time())
+        iso_string = datetime.toString(Qt.ISODate)
+        self.settings.setValue("today/login_time", iso_string)
 
     def update_end_time(self):
         workHours = self.workdayHours.value()
@@ -197,7 +216,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.curIdleTime.setTime(QTime(0, 0))
             message = f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!"
             self.consoleTextArea.appendPlainText(message)
-            tray.showMessage("Hourly Tracker", message, tray.icon(), 60000)
+            self.show_workday_complete_notif()
+            notification_timer.start(
+                self.settings.value(
+                    "settings/notification_interval", NOTIF_INTERVAL_DEFAULT
+                )
+                * 60
+                * 1000
+            )
+
+    def show_workday_complete_notif(self):
+        tray.showMessage(
+            "Hourly Tracker",
+            f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!",
+            tray.icon(),
+        )
 
     def maybe_restart_timer(self):
         if not idle_timer.isActive():
@@ -205,6 +238,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not finished_timer.isActive():
             finished_timer.start(1000)
             self.consoleTextArea.appendPlainText("Restarted workday tracking...")
+            notification_timer.stop()
 
     def tray_icon_clicked(self, reason):
         if reason == QSystemTrayIcon.Trigger:
@@ -227,8 +261,10 @@ if __name__ == "__main__":
     window.register_callback(window.increment_idle_time)
     idle_timer = QTimer()
     finished_timer = QTimer()
+    notification_timer = QTimer()
     idle_timer.timeout.connect(window.check_idle_time)
     finished_timer.timeout.connect(window.check_workday_complete)
+    notification_timer.timeout.connect(window.show_workday_complete_notif)
     idle_timer.start(1000)
     finished_timer.start(1000)
 
