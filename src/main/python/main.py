@@ -197,7 +197,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.curIdleTime.setTime(QTime(0, 0))
             message = f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!"
             self.consoleTextArea.appendPlainText(message)
-            tray.showMessage("Hourly Tracker", message, tray.icon())
+            tray.showMessage("Hourly Tracker", message, tray.icon(), 60000)
 
     def maybe_restart_timer(self):
         if not idle_timer.isActive():
