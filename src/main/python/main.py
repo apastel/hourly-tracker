@@ -13,7 +13,6 @@ from pathlib import Path
 
 import appdirs
 import fbs.builtin_commands
-import fbs.resources
 import fbs_runtime.application_context.PySide6
 import login_time
 from generated.ui_form import Ui_MainWindow
@@ -198,23 +197,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.curIdleTime.setTime(QTime(0, 0))
             message = f"Workday completed at {self.endTime.time().toString('h:mm AP')}, go relax!"
             self.consoleTextArea.appendPlainText(message)
-            # notification.notify(
-            #     title="Hourly Tracker",
-            #     message=message,
-            #     app_name=fbs_runtime.PUBLIC_SETTINGS["app_name"],
-            #     timeout=5,  # seconds (ignored on Windows)
-            # )
-            if fbs.builtin_commands.is_windows():
-                from winotify import Notification
-
-                toast = Notification(
-                    app_id="HourlyTracker",
-                    title="HourlyTracker",
-                    msg="You have been idle for 20 minutes",
-                    icon=fbs.resources.get_icons()[-1],  # Optional: path to icon
-                )
-
-                toast.show()
+            tray.showMessage("Hourly Tracker", message, tray.icon())
 
     def maybe_restart_timer(self):
         if not idle_timer.isActive():
