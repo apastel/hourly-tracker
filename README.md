@@ -1,86 +1,18 @@
 # Hourly Tracker
 
-### Install packages
+Hourly Tracker is a tool for tracking when your workday is complete, given three variables:
+1. The time you first logged in to your machine today.
+2. The number of hours you plan to work today.
+3. Your total idle time.
 
-Windows
-```
-# Install PDM first, then run
-pdm install
-```
+Tracking idle time is at the heart of what that Hourly Tracker provides. Whether you're on Windows or Linux, Hourly
+Tracker uses OS built-in libraries to keep track of when your keyboard/mouse goes idle using a configurable threshold
+(like 25 minutes, for example) before marking you idle.
 
-Linux
-```
-sudo apt install libcairo2-dev libgirepository1.0-dev
-
-# Now `fpm` is needed by fbs installer for some reason
-sudo apt install ruby-full
-sudo gem install fpm
-
-# Install PDM first, then run:
-pdm install
-```
-
-### Install pre-commit
-```
-pre-commit install
-```
-
-### Generate `ui_form.py`:
-```
-pyside6-uic -o src/main/python/ui_form.py src/main/resources/main_window.ui
-```
-
-### Test
-```
-pdm fbs run
-```
-
-### Build package:
-```
-pdm fbs freeze
-pdm fbs installer
-```
-
-### Release:
-
-```
-fbs gengpgkey
-fbs register       # or `login` if you already have an account
-fbs buildvm ubuntu # or `arch` / `fedora`
-fbs runvm ubuntu
-# In the Ubuntu virtual machine:
-fbs release
-  Done! Your users can now install your app via the following commands:
-      sudo apt-get install apt-transport-https
-      wget -qO - https://fbs.sh/apastel/HourlyTracker/public-key.gpg | sudo apt-key add -
-      echo 'deb [arch=amd64] https://fbs.sh/apastel/HourlyTracker/deb stable main' | sudo tee /etc/apt/sources.list.d/hourlytracker.list
-      sudo apt-get update
-      sudo apt-get install hourlytracker
-  If they already have your app installed, they can force an immediate update via:
-      sudo apt-get update -o Dir::Etc::sourcelist="/etc/apt/sources.list.d/hourlytracker.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
-      sudo apt-get install --only-upgrade hourlytracker
-  Finally, your users can also install without automatic updates by downloading:
-      https://fbs.sh/apastel/HourlyTracker/HourlyTracker.deb
-  Also, src/build/settings/base.json was updated with the new version.
-```
-Getting this issue running after installing
-```
-$ /opt/HourlyTracker/HourlyTracker
-qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
-This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
-
-Available platform plugins are: linuxfb, wayland-egl, vkkhrdisplay, offscreen, wayland, vnc, xcb, minimal, minimalegl, eglfs.
-
-Aborted (core dumped)
-```
-
-## Todo
-* Bug: App closes sometimes when right-clicking system tray icon
-* Bug: Occasionally the app initializes with the start time hours digit being 1 instead of what it actually is
-* Keep tracking idle time after workday finishes so that if you extend hours, it still tracked
-* Windows: actually track idle time
-* Problem: idle time resets on linux when music playing in browser tab
-* Persist console log for the day so that when user closes/re-opens app, the console so far for the day is shown instead of starting over.
-* ~~When workday completes, then user increases workday hours to resume idle checking, then decreases hours back to completion, need to stop timer again~~
-* ~~Notification when workday completes~~
-* ~~Save "workday hours" and "idle threshold" to settings~~
+This is perfect for hourly remote employees or anybody who maybe takes breaks in the middle of their workday for meals,
+exercise, or appointments and errands, and doesn't want to have to manually keep track of how many hours they worked.
+Say for example you logged into your work computer at 8:30am and you are planning to work an 8-hour day. You might just
+stop working for the day at 4:30, but you spent roughly 90 minutes minutes away from your computer and you can't remember
+exactly how long it was. Also, you worked extra hours into the night, more than your normally do. Now, you really have
+no idea how many hours your worked today. You know roughly what time you started, roughly how much time you spent away,
+and roughly how many extra hours but it's all a haze. Hourly Tracker tracks *all* of this for you.
