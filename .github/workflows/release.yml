@@ -1,0 +1,64 @@
+# This workflow is automatically run when a new tag is pushed (either manually or with "Create Tag" workflow)
+
+name: Release and Publish
+
+on:
+  push:
+    tags:
+      - '**'
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  build-exe:
+    uses: ./.github/workflows/build-exe.yml
+    secrets: inherit
+
+  github-release:
+    name: Draft GitHub Release
+    needs:
+      - build-exe
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # IMPORTANT: mandatory for making GitHub Releases
+      id-token: write  # IMPORTANT: mandatory for sigstore
+
+    steps:
+    - name: Draft GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        gh release create \
+        '${{ github.ref_name }}' \
+        --repo '${{ github.repository }}' \
+        --generate-notes \
+        --draft
+
+      # Necessary for getting executable name, since it won't match the git ref
+      # if we're releasing a branch build
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Get base.json file
+      id: json-properties
+      uses: zoexx/github-action-json-file-properties@1.0.6
+      with:
+        file_path: src/build/settings/base.json
+
+    - name: Download Windows installer
+      uses: actions/download-artifact@v4
+      with:
+        name: installer-exe
+    - name: Upload executable installers to Github Release
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        gh release upload \
+        '${{ github.ref_name }}' \
+        --repo '${{ github.repository }}' \
+        HourlyTracker-${{ steps.json-properties.outputs.version }}-Windows-Installer.exe
