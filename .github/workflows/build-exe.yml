@@ -1,6 +1,6 @@
-# This workflow builds and tests the Windows installer for Hourly Tracker.
+# This workflow builds the Windows installer for Hourly Tracker.
 
-name: Build and Verify (Windows)
+name: Build Installer (Windows)
 
 on:
   push:
