@@ -3,5 +3,5 @@
     "display_name": "Hourly Tracker",
     "author": "Alex Pastel",
     "main_module": "src/main/python/main.py",
-    "version": "0.1.0"
+    "version": "0.2.0"
 }
