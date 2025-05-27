@@ -1,10 +1,10 @@
 [project]
 name = "hourly-tracker"
-version = "0.1.0"
-description = "Default template for PDM package"
+dynamic = ["version"]
 authors = [
     {name = "apastel", email = "alex.r.pastel@gmail.com"},
 ]
+description = "Automatically track your workday hours"
 dependencies = []
 requires-python = "<=3.13,>=3.9"
 readme = "README.md"
