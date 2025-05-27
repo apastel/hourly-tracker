@@ -1,0 +1,48 @@
+name: Create Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'The tag name'
+        required: true
+
+concurrency:
+  group: tag
+  cancel-in-progress: false
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    permissions:
+        # Give the default GITHUB_TOKEN write permission to commit and push the
+        # added or changed files to the repository.
+        contents: write
+        actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Setup PDM
+        uses: pdm-project/setup-pdm@v4
+      - name: Update versions in files
+        run: |
+          pdm version ${{ inputs.revision  }}
+      - name: Commit version files to main, and tag
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: ${{ inputs.revision }}
+          tagging_message: ${{ inputs.revision }}
+      - name: Dispatch release workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: 'apastel',
+              repo: 'hourly-tracker',
+              workflow_id: 'release.yml',
+              ref: '${{ inputs.revision }}'
+            })

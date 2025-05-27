@@ -15,7 +15,7 @@ from pathlib import Path
 import fbs.builtin_commands
 import fbs_runtime.application_context.PySide6
 import login_time
-from generated.ui_form import Ui_MainWindow
+from generated import ui_main_window
 from PySide6.QtCore import QDate
 from PySide6.QtCore import QDateTime
 from PySide6.QtCore import QSettings
@@ -50,7 +50,7 @@ logging.basicConfig(
 )
 
 
-class MainWindow(QMainWindow, Ui_MainWindow):
+class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
     def __init__(self):
         super().__init__()
 

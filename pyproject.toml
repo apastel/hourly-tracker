@@ -28,3 +28,7 @@ lint = [
 [tool.pdm.scripts]
 # Change directory to project root and run fbs with all arguments
 fbs = "fbs"
+# Use this to generate the UI files (Windows only)
+generate = "bash scripts/generate_ui_files.sh"
+# Use this to bump all the project versions
+version = "bash bump_versions.sh"
