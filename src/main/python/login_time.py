@@ -14,8 +14,7 @@ def get_current_session_login_time():
         for line in lines[1:]:
             parts = line.split()
             if "Active" in parts:
-                # Usually the last 2 parts are date and time
-                time_str = " ".join(parts[-2:])
+                time_str = " ".join(parts[-3:])
                 try:
                     login_time = datetime.datetime.strptime(
                         time_str, "%m/%d/%Y %I:%M %p"
