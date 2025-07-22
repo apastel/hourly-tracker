@@ -62,11 +62,13 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
         self._callbacks = []
         self._cur_minutes_idle = 0
         self.total_minutes_idle = 0
-        # todo: redundant to store date separately when it's in today/login_time
         if self.get_date_from_recorded_login_time() == datetime.date.today():
             self.total_minutes_idle = int(
                 self.settings.value("today/total_minutes_idle", 0)
             )
+        else:
+            self.settings.setValue("today/total_minutes_idle", 0)
+
         if not self.settings.value("settings/notification_interval"):
             self.settings.setValue(
                 "settings/notification_interval", NOTIF_INTERVAL_DEFAULT
