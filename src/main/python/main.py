@@ -1,5 +1,6 @@
 import ctypes
 import ctypes.wintypes as wintypes
+import datetime
 import logging
 import math
 import os
@@ -7,9 +8,6 @@ import pathlib
 import subprocess
 import sys
 import time
-from datetime import date
-from datetime import datetime
-from datetime import timedelta
 from pathlib import Path
 
 import fbs.builtin_commands
@@ -65,7 +63,7 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
         self._cur_minutes_idle = 0
         self.total_minutes_idle = 0
         # todo: redundant to store date separately when it's in today/login_time
-        if self.settings.value("today/date", date.today()) == date.today():
+        if self.get_date_from_recorded_login_time() == datetime.date.today():
             self.total_minutes_idle = int(
                 self.settings.value("today/total_minutes_idle", 0)
             )
@@ -73,7 +71,7 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
             self.settings.setValue(
                 "settings/notification_interval", NOTIF_INTERVAL_DEFAULT
             )
-        idle_str = str(timedelta(minutes=self.total_minutes_idle))[:-3]
+        idle_str = str(datetime.timedelta(minutes=self.total_minutes_idle))[:-3]
         self.is_idle = False
         self.setupUi(self)
         self.startTime.setTime(self.get_login_time())
@@ -128,7 +126,7 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
             awk_cmd = "awk 'END {print $6}'"
             cmd = f"{last_cmd} | {perl_cmd} | {awk_cmd}"
             first_login_time = subprocess.getoutput(cmd).partition("\n")[0]
-            first_login_time = datetime.strptime(first_login_time, "%H:%M")
+            first_login_time = datetime.datetime.strptime(first_login_time, "%H:%M")
 
         return QTime(first_login_time.hour, first_login_time.minute)
 
@@ -187,13 +185,13 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
             )
             self.is_idle = False
 
-        idle_str = str(timedelta(seconds=seconds_idle))
+        idle_str = str(datetime.timedelta(seconds=seconds_idle))
         self.curIdleTime.setTime(QTime.fromString(idle_str, "h:mm:ss"))
 
     def increment_idle_time(self):
         if self.current_minutes_idle >= self.idleThreshold.value():
             if not self.is_idle:
-                minutes_since_idle = datetime.now() - timedelta(
+                minutes_since_idle = datetime.datetime.now() - datetime.timedelta(
                     minutes=self.current_minutes_idle
                 )
                 self.consoleTextArea.appendPlainText(
@@ -204,9 +202,9 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
             else:
                 self.total_minutes_idle += 1
             self.is_idle = True
-            idle_str = str(timedelta(minutes=self.total_minutes_idle))[:-3]
+            idle_str = str(datetime.timedelta(minutes=self.total_minutes_idle))[:-3]
             self.totalIdleTime.setTime(QTime.fromString(idle_str, "h:mm"))
-            self.settings.setValue("today/date", date.today())
+            self.settings.setValue("today/date", datetime.date.today())
             self.settings.setValue("today/total_minutes_idle", self.total_minutes_idle)
 
     def check_workday_complete(self):
@@ -254,6 +252,42 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
     def save_settings(self):
         self.settings.setValue("settings/workday_hours", self.workdayHours.value())
         self.settings.setValue("settings/idle_threshold", self.idleThreshold.value())
+
+    def get_date_from_recorded_login_time(self):
+        recorded_login_time_str = self.settings.value("today/login_time")
+        if not recorded_login_time_str:
+            logging.debug(
+                "today/login_time did not exist, so get_date_from_recorded_login_time() == today"
+            )
+            return datetime.date.today()
+        logging.debug(
+            f"recorded_login_time_str (from settings): {recorded_login_time_str} type: {type(recorded_login_time_str)}"
+        )
+
+        # Try to parse recorded_time_str into a datetime object
+        recorded_datetime_obj = None
+        if recorded_login_time_str:
+            try:
+                # Ensure it's a string before parsing, in case QSettings returns something else
+                recorded_datetime_obj = datetime.datetime.fromisoformat(
+                    str(recorded_login_time_str)
+                )
+            except ValueError as e:
+                logging.warning(
+                    f"Failed to parse recorded_login_time_str {recorded_login_time_str!r}: {e}"
+                )
+                # Handle error: maybe clear the setting or treat as no recorded time
+                recorded_datetime_obj = None  # Treat as if no valid time was recorded
+
+        # Get the date portion from recorded_datetime_obj if it exists
+        # This will be a datetime.date object (e.g., datetime.date(2025, 7, 21))
+        recorded_date_obj = None
+        if recorded_datetime_obj:
+            recorded_date_obj = recorded_datetime_obj.date()
+            logging.debug(
+                f"recorded_date_obj: {recorded_date_obj} type: {type(recorded_date_obj)}"
+            )
+        return recorded_date_obj
 
 
 if __name__ == "__main__":

@@ -3,10 +3,6 @@ import logging
 import subprocess
 
 
-def get_today_str():
-    return datetime.date.today().isoformat()
-
-
 def get_current_session_login_time():
     try:
         output = subprocess.check_output("quser", shell=True, text=True)
@@ -28,27 +24,28 @@ def get_current_session_login_time():
 
 
 def get_or_update_first_login_today(self):
-    today = get_today_str()
-    logging.debug(f"today: {today}")
     current_session_login_time = (
         get_current_session_login_time() or datetime.datetime.now()
     )
-    logging.debug(f"current_session_login_time: {current_session_login_time}")
+    logging.debug(
+        f"current_session_login_time: {current_session_login_time}  type: {type(current_session_login_time)}"
+    )
 
-    recorded_time = self.settings.value("today/login_time")
-    logging.debug(f"recorded_time: {recorded_time}")
-    recorded_date = self.settings.value("today/date")
-    logging.debug(f"recorded_data: {recorded_date}")
-    if recorded_time and recorded_date == today:
-        logging.debug("recorded_time == today")
-        recorded_time = datetime.datetime.fromisoformat(recorded_time)
+    if self.get_date_from_recorded_login_time() == datetime.date.today():
+        logging.debug("recorded_time's date matches today")
+        recorded_login_time_str = self.settings.value("today/login_time")
         logging.debug(
-            f"min({recorded_time}, {current_session_login_time}) = {min(recorded_time, current_session_login_time)}"
+            f"recorded_login_time_str (from settings): {recorded_login_time_str} type: {type(recorded_login_time_str)}"
         )
-        return min(recorded_time, current_session_login_time)
+        recorded_time_for_min = datetime.datetime.fromisoformat(
+            str(recorded_login_time_str)
+        )
+        logging.debug(
+            f"min({recorded_time_for_min}, {current_session_login_time}) = {min(recorded_time_for_min, current_session_login_time)}"
+        )
+        return min(recorded_time_for_min, current_session_login_time)
 
     logging.debug("recorded_time != today, save new time")
     # Save as today's first login
     self.settings.setValue("today/login_time", current_session_login_time.isoformat())
-    self.settings.setValue("today/date", today)
     return current_session_login_time
