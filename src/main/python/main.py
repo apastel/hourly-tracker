@@ -183,7 +183,7 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
         self.current_minutes_idle = minutes_idle
         if self.current_minutes_idle == 0 and self.is_idle:
             self.consoleTextArea.appendPlainText(
-                f"User returned from idle at {datetime.now().strftime('%I:%M %p')}"
+                f"User returned from idle at {datetime.datetime.now().strftime('%I:%M %p')}"
             )
             self.is_idle = False
 
