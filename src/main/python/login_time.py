@@ -19,7 +19,7 @@ def get_current_session_login_time():
                 except ValueError:
                     continue
     except subprocess.CalledProcessError as e:
-        print("Failed to run quser:", e)
+        logging.error("Failed to run quser:", e)
     return None
 
 

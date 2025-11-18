@@ -26,6 +26,22 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMenu
 from PySide6.QtWidgets import QSystemTrayIcon
 
+# Configure Win32 function return types to avoid signed/truncation issues
+# (restype must be set before calls; safe no-ops on non-Windows platforms)
+try:
+    kernel32 = ctypes.windll.kernel32
+    user32 = ctypes.windll.user32
+    try:
+        kernel32.GetTickCount64.restype = ctypes.c_ulonglong
+    except Exception:
+        # Older Windows / wrappers may not expose GetTickCount64
+        pass
+    kernel32.GetTickCount.restype = wintypes.DWORD
+    user32.GetLastInputInfo.restype = wintypes.BOOL
+except Exception:
+    kernel32 = None
+    user32 = None
+
 APP_DATA_PATH: pathlib.Path = (
     pathlib.Path(os.getenv("APPDATA" if os.name == "nt" else "HOME"))
     / fbs_runtime.PUBLIC_SETTINGS["app_name"]
@@ -149,6 +165,8 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
         )
 
     def check_idle_time(self):
+        minutes_idle = 0
+        seconds_idle = 0
         if fbs.builtin_commands.is_linux():
             # xprintidle doesn't work on wayland
             # seconds_idle = int(int(subprocess.getoutput("xprintidle")) / 1000)
@@ -168,6 +186,7 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
             minutes_idle = math.floor(millis_idle / 1000 / 60)
 
         elif fbs.builtin_commands.is_windows():
+            logging.debug("checking idle time (Windows)")
 
             class LASTINPUTINFO(ctypes.Structure):
                 _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
@@ -175,10 +194,34 @@ class MainWindow(QMainWindow, ui_main_window.Ui_MainWindow):
             lii = LASTINPUTINFO()
             lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
 
-            if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
-                millis_idle = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
+            # Ensure GetLastInputInfo argtype points to our structure (best-effort)
+            try:
+                if user32 is not None:
+                    user32.GetLastInputInfo.argtypes = [ctypes.POINTER(LASTINPUTINFO)]
+            except Exception:
+                pass
+
+            now_ms = 0
+            last_ms = 0
+            if user32 is not None and user32.GetLastInputInfo(ctypes.byref(lii)):
+                last_ms = int(lii.dwTime)
+                if kernel32 is not None and hasattr(kernel32, "GetTickCount64"):
+                    # Prefer 64-bit tick count to avoid wrap
+                    now_ms = int(kernel32.GetTickCount64())
+                    millis_idle = int(now_ms) - last_ms
+                elif kernel32 is not None:
+                    now_ms = int(kernel32.GetTickCount())
+                    # Handle 32-bit wrap using unsigned arithmetic
+                    millis_idle = (int(now_ms) - last_ms) & 0xFFFFFFFF
+                else:
+                    millis_idle = 0
+
+                logging.debug("GetTickCount(): %s", now_ms)
+                logging.debug("lii.dwTime: %s", last_ms)
                 seconds_idle = millis_idle // 1000
                 minutes_idle = seconds_idle // 60
+            else:
+                logging.debug("GetLastInputInfo failed or not available")
 
         self.current_minutes_idle = minutes_idle
         if self.current_minutes_idle == 0 and self.is_idle:
