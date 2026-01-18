@@ -6,24 +6,16 @@ authors = [
 ]
 description = "Automatically track your workday hours"
 dependencies = []
-requires-python = "<=3.13,>=3.9"
+requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "MIT"}
-
 
 [tool.pdm]
 distribution = false
 
-[dependency-groups]
-gui = [
-    "PySide6>=6.9.0",
-    "file:///${PROJECT_ROOT}/fbs_pro-1.2.1.tar.gz",
-]
-lint = [
-    "flake8>=7.2.0",
-    "black>=25.1.0",
-    "pre-commit>=4.2.0",
-]
+[tool.pdm.overrides]
+# fbs-1.2.1 pulls PyInstaller too old for Python 3.13+
+pyinstaller = ">=6.17.0"
 
 [tool.pdm.scripts]
 # Change directory to project root and run fbs with all arguments
@@ -32,3 +24,14 @@ fbs = "fbs"
 generate = "bash scripts/generate_ui_files.sh"
 # Use this to bump all the project versions
 version = "bash scripts/bump_versions.sh"
+
+[dependency-groups]
+gui = [
+    "PySide6>=6.10.1",
+    "fbs-pro @ file:///${PROJECT_ROOT}/fbs_pro-1.2.1.tar.gz",
+]
+lint = [
+    "flake8>=7.3.0",
+    "black>=25.12.0",
+    "pre-commit>=4.5.1",
+]
