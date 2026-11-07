@@ -13,7 +13,7 @@ A break shorter than the away threshold (20 minutes by default, same idea as the
 
 Idle and offline periods are rows in the away table. **Extends day** is the part of a row after your start time, and that is the part that pushes your finish later. Edit a row to fix its type or its start and end. Delete a row to put that time back into hours worked. The projected end moves earlier by the same amount.
 
-Closing the window stops tracking. The next launch records the time in between as offline once it passes the threshold. Minimizing the window keeps idle tracking running.
+Minimizing or closing the window sends it to the system tray while idle tracking keeps running. Double-click the tray icon to reopen it. Use the tray menu to reopen or quit the app. Quitting stops tracking and the next launch records the time in between as offline once it passes the threshold.
 
 The database is separate from the original Hourly Tracker settings:
 
@@ -23,7 +23,7 @@ The database is separate from the original Hourly Tracker settings:
 
 ## Run
 
-The window uses Tk, which ships with Python. There are no runtime dependencies.
+The window uses Tk, which ships with Python. System tray support uses Pillow and pystray, installed from the project dependencies.
 
 ```powershell
 python run.py

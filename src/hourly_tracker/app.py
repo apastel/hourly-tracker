@@ -54,6 +54,8 @@ class HourlyTrackerApp:
         self._rows: list[AwayRow] = []
         self._idle_error_logged = False
         self._log_lines = 0
+        self._tray = None
+        self._hiding_to_tray = False
 
         self.root.title("Hourly Tracker")
         self.root.minsize(760, 560)
@@ -62,6 +64,8 @@ class HourlyTrackerApp:
         self._build()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.bind("<Unmap>", self._on_unmap)
+        self.root.after(100, self._start_tray)
         self._refreshing = False
         if auto_poll:
             self._schedule()
@@ -251,6 +255,43 @@ class HourlyTrackerApp:
             return
         self._tick()
         self.root.after(self.poll_ms, self._schedule)
+
+    def _start_tray(self) -> None:
+        if self._tray is not None:
+            return
+        if not self.root.winfo_viewable():
+            self.root.after(100, self._start_tray)
+            return
+        try:
+            from hourly_tracker.tray import SystemTray
+
+            self._tray = SystemTray(self.show_from_tray, self.quit_from_tray)
+            self._tray.start()
+        except Exception:
+            logging.exception("System tray could not be started")
+
+    def _on_unmap(self, _event=None) -> None:
+        if self._hiding_to_tray:
+            return
+        if self.root.state() == "iconic":
+            self.root.after_idle(self._minimize_to_tray)
+
+    def _minimize_to_tray(self) -> None:
+        self._hiding_to_tray = True
+        self.root.withdraw()
+        self._hiding_to_tray = False
+        self._start_tray()
+
+    def show_from_tray(self) -> None:
+        def show() -> None:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+
+        self.root.after(0, show)
+
+    def quit_from_tray(self) -> None:
+        self.root.after(0, self._quit)
 
     def _tick(self) -> None:
         now = dt.datetime.now()
@@ -461,7 +502,15 @@ class HourlyTrackerApp:
         self.log.see("end")
 
     def _on_close(self) -> None:
+        if self._tray is not None:
+            self.root.iconify()
+            return
+        self._quit()
+
+    def _quit(self) -> None:
         self._polling = False
+        if self._tray is not None:
+            self._tray.stop()
         try:
             self.tracker.shutdown(dt.datetime.now())
         except Exception:

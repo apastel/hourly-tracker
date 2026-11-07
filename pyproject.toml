@@ -8,13 +8,19 @@ license = {text = "MIT"}
 authors = [
     {name = "Alex Pastel", email = "alex.r.pastel@gmail.com"},
 ]
-dependencies = []
+dependencies = [
+    "Pillow>=10.0",
+    "pystray>=0.19",
+]
 
 [project.scripts]
 hourly-tracker = "hourly_tracker.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+hourly_tracker = ["assets/*.png"]
 
 [build-system]
 requires = ["setuptools>=68"]
