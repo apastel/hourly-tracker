@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -21,12 +22,56 @@ except Exception as exc:  # pragma: no cover - depends on the local Python build
 else:
     IMPORT_ERROR = None
 
+from hourly_tracker.formatting import format_clock
 from hourly_tracker.storage import Storage
 from hourly_tracker.tracker import Tracker
 
 
 @unittest.skipIf(tk is None, f"tkinter unavailable: {IMPORT_ERROR}")
 class AwayTableTest(unittest.TestCase):
+    def test_workday_notifications_repeat_every_fifteen_minutes(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "notifications.db")
+        self.addCleanup(storage.close)
+        start = dt.datetime.now().replace(microsecond=0) - dt.timedelta(hours=10)
+        tracker = Tracker(storage, login_time=lambda: start)
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.attributes("-alpha", 0)
+        root.withdraw()
+        app = HourlyTrackerApp(
+            root,
+            tracker,
+            idle_provider=lambda: 0.0,
+            auto_poll=False,
+        )
+        now = dt.datetime.now().replace(microsecond=0)
+        summary = SimpleNamespace(
+            day=now.date(),
+            projected_end=now - dt.timedelta(hours=1),
+        )
+        app._notified_workday_day = None
+        app._next_workday_reminder = None
+
+        with mock.patch("hourly_tracker.app.show_desktop_notification") as notify:
+            app._update_workday_notifications(now, summary)
+            app._update_workday_notifications(now + dt.timedelta(minutes=19), summary)
+            self.assertEqual(notify.call_count, 1)
+            app._update_workday_notifications(now + dt.timedelta(minutes=20), summary)
+            app._update_workday_notifications(now + dt.timedelta(minutes=40), summary)
+
+        self.assertEqual(notify.call_count, 3)
+        completed_at = format_clock(summary.projected_end)
+        expected_text = (
+            "Workday complete",
+            f"Your workday was completed at {completed_at}. "
+            "Time to stop working.",
+        )
+        for call in notify.call_args_list:
+            self.assertEqual(call.args, expected_text)
+
     def test_table_lists_idle_and_delete_returns_it_to_worked_time(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

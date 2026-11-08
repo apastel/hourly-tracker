@@ -20,6 +20,7 @@ from hourly_tracker.formatting import (
     parse_timestamp,
 )
 from hourly_tracker.idle import get_idle_seconds
+from hourly_tracker.notifications import show_desktop_notification
 from hourly_tracker.tracker import AwayRow, Tracker, TrackerError
 
 STATUS_TEXT = {
@@ -56,6 +57,8 @@ class HourlyTrackerApp:
         self._log_lines = 0
         self._tray = None
         self._hiding_to_tray = False
+        self._notified_workday_day: dt.date | None = None
+        self._next_workday_reminder: dt.datetime | None = None
 
         self.root.title("Hourly Tracker")
         self.root.minsize(760, 560)
@@ -324,6 +327,7 @@ class HourlyTrackerApp:
         try:
             now = dt.datetime.now()
             summary = self.tracker.summary(now)
+            self._update_workday_notifications(now, summary)
             self._rows = self.tracker.rows(now)
             self.day_var.set(format_day(summary.day))
             self.status_label.configure(
@@ -353,6 +357,30 @@ class HourlyTrackerApp:
             self._fill_tree()
         finally:
             self._refreshing = False
+
+    def _update_workday_notifications(self, now: dt.datetime, summary) -> None:
+        if now < summary.projected_end:
+            return
+
+        notification = (
+            "Workday complete",
+            f"Your workday was completed at {format_clock(summary.projected_end)}. "
+            "Time to stop working.",
+        )
+
+        if self._notified_workday_day != summary.day:
+            show_desktop_notification(*notification)
+            self._notified_workday_day = summary.day
+            self._next_workday_reminder = now + dt.timedelta(minutes=20)
+            return
+
+        if (
+            self._next_workday_reminder is not None
+            and now >= self._next_workday_reminder
+        ):
+            show_desktop_notification(*notification)
+            while now >= self._next_workday_reminder:
+                self._next_workday_reminder += dt.timedelta(minutes=20)
 
     def _fill_tree(self) -> None:
         selected = self.tree.selection()

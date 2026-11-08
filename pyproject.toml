@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "Pillow>=10.0",
     "pystray>=0.19",
+    "winotify>=1.1.0; sys_platform == 'win32'",
 ]
 
 [project.scripts]

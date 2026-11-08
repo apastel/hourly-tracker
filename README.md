@@ -15,6 +15,8 @@ Idle and offline periods are rows in the away table. **Extends day** is the part
 
 Minimizing or closing the window sends it to the system tray while idle tracking keeps running. Double-click the tray icon to reopen it. Use the tray menu to reopen or quit the app. Quitting stops tracking and the next launch records the time in between as offline once it passes the threshold.
 
+When the projected workday ends, Windows displays a desktop notification. If work continues past the end time, the notification repeats every 20 minutes.
+
 The database is separate from the original Hourly Tracker settings:
 
 - Windows: `%APPDATA%\HourlyTrackerV2\hourly_tracker.db`
