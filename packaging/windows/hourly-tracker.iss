@@ -1,5 +1,7 @@
 #define AppName "Hourly Tracker"
-#define AppVersion "2.0.0"
+#ifndef AppVersion
+#error "Pass /DAppVersion=<ref>-<commit> when compiling this installer."
+#endif
 #define AppPublisher "Alex Pastel"
 #define AppExeName "HourlyTracker.exe"
 #define AppId "{{CC4C553E-C848-42CC-B4D5-55D315E89910}"
@@ -16,7 +18,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 OutputDir={#ProjectRoot}\dist
-OutputBaseFilename=HourlyTracker-Setup
+OutputBaseFilename=HourlyTracker-Setup-{#AppVersion}
 SetupIconFile={#ProjectRoot}\packaging\windows\hourly-tracker.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 ArchitecturesInstallIn64BitMode=x64compatible

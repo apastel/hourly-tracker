@@ -1,0 +1,81 @@
+name: Build Windows installer
+
+run-name: Build Windows installer (${{ inputs.source_ref }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch or tag to build
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Check out selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[build]"
+
+      - name: Identify selected revision
+        id: version
+        shell: pwsh
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          $ref = $env:SOURCE_REF -replace '[^A-Za-z0-9.-]', '-'
+          $ref = $ref -replace '^[.-]+|[.-]+$', ''
+          if (-not $ref) {
+            throw "Could not derive a valid version from the selected ref."
+          }
+          if ($ref.Length -gt 64) {
+            $ref = $ref.Substring(0, 64).TrimEnd('.', '-')
+          }
+          $commit = git rev-parse --short=12 HEAD
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not determine the checked-out commit."
+          }
+          "value=$ref-$commit" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build frozen app and installer
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          python -m PyInstaller --clean --noconfirm packaging\windows\hourly_tracker.spec
+          $iscc = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler not found at $iscc"
+          }
+          & $iscc "/DAppVersion=$env:APP_VERSION" packaging\windows\hourly-tracker.iss
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: hourly-tracker-installer
+          path: dist\HourlyTracker-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30

@@ -26,10 +26,25 @@ Build on Windows with the same architecture as the desired installer. Install th
 ```powershell
 python -m pip install -e ".[build]"
 python -m PyInstaller --clean --noconfirm packaging\windows\hourly_tracker.spec
-ISCC.exe packaging\windows\hourly-tracker.iss
+$buildRef = git branch --show-current
+if (-not $buildRef) { $buildRef = git describe --tags --exact-match HEAD 2>$null }
+if (-not $buildRef) { $buildRef = "detached" }
+$buildRef = ($buildRef -replace '[^A-Za-z0-9.-]', '-') -replace '^[.-]+|[.-]+$', ''
+$commit = git rev-parse --short=12 HEAD
+if ($LASTEXITCODE -ne 0) { throw "Could not determine the checked-out commit." }
+$appVersion = "$buildRef-$commit"
+ISCC.exe "/DAppVersion=$appVersion" packaging\windows\hourly-tracker.iss
 ```
 
-The installer is written to `dist\HourlyTracker-Setup.exe`. Both the “start when I sign in” task and the “start now” post-install option are checked by default. The uninstaller removes the installed program, its startup registry value, and all per-user Hourly Tracker data, including the database and logs.
+The installer is written to `dist\HourlyTracker-Setup-<ref>-<commit>.exe`. Its displayed version and filename identify the selected branch or tag and the checked-out commit (for example, `HourlyTracker-Setup-feature-timeout-a1b2c3d4e5f6.exe`). Both the “start when I sign in” task and the “start now” post-install option are checked by default. The uninstaller removes the installed program, its startup registry value, and all per-user Hourly Tracker data, including the database and logs.
+
+## Build and release with GitHub Actions
+
+The **Build Windows installer** workflow can be run manually with a branch or tag ref. It builds the versioned installer and uploads it as the `hourly-tracker-installer` workflow artifact. GitHub Actions wraps workflow artifacts in a ZIP; the tag-and-release workflow extracts that artifact and attaches the `.exe` directly to the draft release, so release users can download the installer without extracting a ZIP.
+
+To prepare a release, run **Tag and draft release**, providing a new `v`-prefixed tag and the branch to tag (default `main`). It creates or reuses that tag, dispatches the installer build on the tag, waits for the build to succeed, and creates a draft GitHub release with the installer attached. Publishing the draft release remains a manual step.
+
+The frozen app is built without UPX packing, which can reduce false antivirus detections. As with other unsigned Windows executables, this cannot guarantee that Chrome or SmartScreen will not warn; Authenticode signing with a trusted code-signing certificate is the standard next step for improving publisher identity and reputation.
 
 The database is separate from the original Hourly Tracker settings:
 
