@@ -17,6 +17,20 @@ Minimizing or closing the window sends it to the system tray while idle tracking
 
 When the projected workday ends, Windows displays a desktop notification. If work continues past the end time, the notification repeats every 20 minutes.
 
+Open **Settings** from the main window to enable or disable starting Hourly Tracker when you sign in to Windows. This option is stored in your per-user Windows startup settings and is available only on Windows.
+
+## Build a Windows installer
+
+Build on Windows with the same architecture as the desired installer. Install the Inno Setup compiler, then run:
+
+```powershell
+python -m pip install -e ".[build]"
+python -m PyInstaller --clean --noconfirm packaging\windows\hourly_tracker.spec
+ISCC.exe packaging\windows\hourly-tracker.iss
+```
+
+The installer is written to `dist\HourlyTracker-Setup.exe`. Both the “start when I sign in” task and the “start now” post-install option are checked by default. The uninstaller removes the installed program, its startup registry value, and all per-user Hourly Tracker data, including the database and logs.
+
 The database is separate from the original Hourly Tracker settings:
 
 - Windows: `%APPDATA%\HourlyTrackerV2\hourly_tracker.db`
@@ -59,4 +73,5 @@ src/hourly_tracker/
   formatting.py         durations and timestamps
   paths.py              per-user data directory
 tests/                  rule tests and a window smoke test
+packaging/windows/      PyInstaller frozen-app and Inno Setup installer definitions
 ```

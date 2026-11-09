@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 try:
     import tkinter as tk
 
-    from hourly_tracker.app import HourlyTrackerApp
+    from hourly_tracker.app import HourlyTrackerApp, StartupSettingsDialog
 except Exception as exc:  # pragma: no cover - depends on the local Python build
     tk = None
     IMPORT_ERROR = exc
@@ -29,6 +29,31 @@ from hourly_tracker.tracker import Tracker
 
 @unittest.skipIf(tk is None, f"tkinter unavailable: {IMPORT_ERROR}")
 class AwayTableTest(unittest.TestCase):
+    def test_settings_window_saves_windows_startup_preference(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "settings.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        with (
+            mock.patch("hourly_tracker.app.startup.is_supported", return_value=True),
+            mock.patch("hourly_tracker.app.startup.is_enabled", return_value=False),
+            mock.patch("hourly_tracker.app.startup.set_enabled") as set_enabled,
+        ):
+            app._open_settings()
+            self.assertIsInstance(app._settings_dialog, StartupSettingsDialog)
+            app._settings_dialog.startup_var.set(True)
+            app._settings_dialog._save_startup()
+
+        set_enabled.assert_called_once_with(True)
+        app._settings_dialog.destroy()
+
     def test_workday_notifications_repeat_every_fifteen_minutes(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

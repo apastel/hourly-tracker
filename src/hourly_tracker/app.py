@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable
 
+from hourly_tracker import startup
 from hourly_tracker.formatting import (
     format_clock,
     format_day,
@@ -56,6 +57,7 @@ class HourlyTrackerApp:
         self._idle_error_logged = False
         self._log_lines = 0
         self._tray = None
+        self._settings_dialog: StartupSettingsDialog | None = None
         self._hiding_to_tray = False
         self._notified_workday_day: dt.date | None = None
         self._next_workday_reminder: dt.datetime | None = None
@@ -120,6 +122,9 @@ class HourlyTrackerApp:
         self.day_var = tk.StringVar()
         ttk.Label(header, textvariable=self.day_var, style="Subtle.TLabel").grid(
             row=0, column=1, sticky="e"
+        )
+        ttk.Button(header, text="Settings", command=self._open_settings).grid(
+            row=0, column=2, sticky="e", padx=(12, 0)
         )
         self.status_label = ttk.Label(header, text="Working", style="Working.TLabel")
         self.status_label.grid(row=1, column=0, sticky="w", pady=(4, 0))
@@ -258,6 +263,42 @@ class HourlyTrackerApp:
             return
         self._tick()
         self.root.after(self.poll_ms, self._schedule)
+
+    def _open_settings(self) -> None:
+        if self._settings_dialog is not None and self._settings_dialog.winfo_exists():
+            self._settings_dialog.lift()
+            return
+        if startup.is_supported():
+            try:
+                enabled = startup.is_enabled()
+            except OSError as exc:
+                logging.exception("Could not read Windows startup setting")
+                messagebox.showerror(
+                    "Settings",
+                    f"Could not read the Windows startup setting:\n{exc}",
+                    parent=self.root,
+                )
+                return
+        else:
+            enabled = False
+        self._settings_dialog = StartupSettingsDialog(
+            self.root,
+            enabled=enabled,
+            on_startup_change=self._set_startup_enabled,
+            windows_supported=startup.is_supported(),
+        )
+
+    def _set_startup_enabled(self, enabled: bool) -> None:
+        try:
+            startup.set_enabled(enabled)
+        except (OSError, RuntimeError) as exc:
+            logging.exception("Could not update Windows startup setting")
+            messagebox.showerror(
+                "Settings",
+                f"Could not update the Windows startup setting:\n{exc}",
+                parent=self.root,
+            )
+            raise
 
     def _start_tray(self) -> None:
         if self._tray is not None:
@@ -544,6 +585,52 @@ class HourlyTrackerApp:
         except Exception:
             logging.exception("Shutdown failed")
         self.root.destroy()
+
+
+class StartupSettingsDialog(tk.Toplevel):
+    def __init__(
+        self,
+        parent: tk.Misc,
+        *,
+        enabled: bool,
+        on_startup_change: Callable[[bool], None],
+        windows_supported: bool,
+    ):
+        super().__init__(parent)
+        self.title("Settings")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.on_startup_change = on_startup_change
+        self.startup_var = tk.BooleanVar(self, value=enabled)
+
+        frame = ttk.Frame(self, padding=16)
+        frame.grid(row=0, column=0, sticky="nsew")
+        ttk.Label(frame, text="Settings", style="Title.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, 12)
+        )
+        if windows_supported:
+            ttk.Checkbutton(
+                frame,
+                text="Start Hourly Tracker when I sign in to Windows",
+                variable=self.startup_var,
+                command=self._save_startup,
+            ).grid(row=1, column=0, sticky="w")
+        else:
+            ttk.Label(
+                frame,
+                text="Startup settings are only available on Windows.",
+                style="Subtle.TLabel",
+            ).grid(row=1, column=0, sticky="w")
+        ttk.Button(frame, text="Close", command=self.destroy).grid(
+            row=2, column=0, sticky="e", pady=(16, 0)
+        )
+
+    def _save_startup(self) -> None:
+        enabled = self.startup_var.get()
+        try:
+            self.on_startup_change(enabled)
+        except (OSError, RuntimeError):
+            self.startup_var.set(not enabled)
 
 
 class EditAwayDialog(tk.Toplevel):

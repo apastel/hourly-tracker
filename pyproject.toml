@@ -14,6 +14,11 @@ dependencies = [
     "winotify>=1.1.0; sys_platform == 'win32'",
 ]
 
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.13,<7",
+]
+
 [project.scripts]
 hourly-tracker = "hourly_tracker.__main__:main"
 
