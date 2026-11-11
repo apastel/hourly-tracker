@@ -357,7 +357,8 @@ class Tracker:
         if last is None:
             self._arm_baseline = True
             return
-        gap = now - last
+        gap_start = max(last, self._ensure_start(now))
+        gap = now - gap_start
         if gap < self._gap_cutoff():
             self._sync_open_idle()
             return
@@ -365,7 +366,7 @@ class Tracker:
         self._close_open_at(last)
         self._open_idle_id = None
         self._ignore_idle_streak = False
-        self._record_offline(last, now, messages)
+        self._record_offline(gap_start, now, messages)
         self._arm_baseline = True
 
     def _consume_idle(

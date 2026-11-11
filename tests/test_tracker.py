@@ -100,6 +100,31 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(summary.idle, dt.timedelta(0))
         self.assertEqual(summary.worked, dt.timedelta(0))
 
+    def test_startup_gap_before_workday_start_does_not_trigger_offline(self):
+        start = dt.datetime(2026, 11, 11, 8, 5, 0)
+        tracker = self.make_tracker(lambda: start, threshold=25)
+        tracker.storage.set_heartbeat(dt.datetime(2026, 11, 11, 0, 0, 0))
+
+        opened = dt.datetime(2026, 11, 11, 8, 21, 35)
+        tracker.tick(opened, 0)
+
+        self.assertEqual(self.events(tracker), [])
+        self.assertEqual(tracker.summary(opened).offline, dt.timedelta(0))
+
+    def test_startup_gap_over_threshold_starts_at_workday_start(self):
+        start = dt.datetime(2026, 11, 11, 8, 5, 0)
+        tracker = self.make_tracker(lambda: start, threshold=25)
+        tracker.storage.set_heartbeat(dt.datetime(2026, 11, 11, 0, 0, 0))
+        opened = start + dt.timedelta(minutes=30)
+
+        tracker.tick(opened, 0)
+
+        events = self.events(tracker)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].kind, "offline")
+        self.assertEqual(events[0].started_at, start)
+        self.assertEqual(events[0].ended_at, opened)
+
     def test_short_gap_is_not_offline(self):
         start = dt.datetime(2026, 11, 6, 12, 0, 0)
         tracker = self.make_tracker(lambda: start, threshold=20)
