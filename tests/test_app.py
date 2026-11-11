@@ -33,6 +33,87 @@ from hourly_tracker.tracker import Tracker
 
 @unittest.skipIf(tk is None, f"tkinter unavailable: {IMPORT_ERROR}")
 class AwayTableTest(unittest.TestCase):
+    def test_start_time_is_shown_read_only(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "start.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        self.assertEqual(app.start_label.winfo_class(), "TLabel")
+        self.assertTrue(app.start_var.get())
+        self.assertFalse(hasattr(app, "start_entry"))
+        self.assertFalse(hasattr(app, "_save_start"))
+
+    def test_summary_orders_primary_metrics_and_emphasizes_total_away(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "summary.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        primary = app.start_label.master.master
+        self.assertEqual(
+            [block.winfo_children()[0].cget("text") for block in primary.winfo_children()],
+            ["Start", "Projected end", "Worked", "Remaining"],
+        )
+        totals = primary.master
+        separator = next(
+            child
+            for child in totals.winfo_children()
+            if child.winfo_class() == "TSeparator"
+        )
+        self.assertEqual(int(separator.grid_info()["row"]), 1)
+        away = next(
+            child
+            for child in totals.winfo_children()
+            if child.winfo_class() == "TFrame"
+            and int(child.grid_info()["row"]) == 2
+        )
+        away_blocks = away.winfo_children()
+        self.assertEqual(
+            [block.winfo_children()[0].cget("text") for block in away_blocks],
+            ["Total Away", "Idle", "Offline"],
+        )
+        self.assertEqual(
+            away_blocks[0].winfo_children()[1].cget("style"),
+            "Metric.TLabel",
+        )
+        self.assertEqual(
+            away_blocks[1].winfo_children()[1].cget("style"),
+            "SecondaryMetric.TLabel",
+        )
+        summary_panel = totals.master
+        vertical_separator = next(
+            child
+            for child in summary_panel.winfo_children()
+            if child.winfo_class() == "TSeparator"
+        )
+        self.assertEqual(str(vertical_separator.cget("orient")), "vertical")
+        self.assertEqual(int(vertical_separator.grid_info()["column"]), 1)
+        self.assertIs(app.hours_spin.master.master, summary_panel)
+        self.assertEqual(int(app.hours_spin.master.grid_info()["column"]), 2)
+        self.assertEqual(int(app.log.cget("height")), 6)
+        self.assertEqual(int(app.log.master.grid_rowconfigure(3)["weight"]), 2)
+        self.assertEqual(int(app.log.master.grid_rowconfigure(6)["weight"]), 1)
+        self.assertEqual(int(app.tree.cget("height")), 8)
+        self.assertEqual(int(app.tree.grid_info()["row"]), 0)
+        self.assertEqual(int(app.table_scrollbar.grid_info()["column"]), 1)
+        self.assertTrue(app.tree.cget("yscrollcommand"))
+        self.assertTrue(app.table_scrollbar.cget("command"))
+        self.assertEqual(int(app.activity_label.grid_info()["row"]), 5)
+        self.assertEqual(int(app.log.grid_info()["row"]), 6)
+
     def test_windows_system_theme_uses_apps_appearance_setting(self):
         key = mock.MagicMock()
         open_key = mock.MagicMock()

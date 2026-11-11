@@ -66,7 +66,7 @@ Or, after `python -m pip install -e .`:
 hourly-tracker
 ```
 
-On the first launch, the start time is the current OS login. Change it in the Start field if that is not when you began working. A clock time that is still later today is read as the most recent time it occurred, so 11:57 PM just after midnight means 11:57 PM yesterday, not later tonight.
+On the first launch, the start time is the current OS login and is displayed read-only in the main window. A clock time that is still later today is read as the most recent time it occurred, so 11:57 PM just after midnight means 11:57 PM yesterday, not later tonight.
 
 ## Tests
 

@@ -19,9 +19,8 @@ from hourly_tracker.formatting import (
     format_duration,
     format_editor,
     format_hms,
-    format_stamp,
     format_start_field,
-    parse_start,
+    format_stamp,
     parse_timestamp,
 )
 from hourly_tracker.idle import get_idle_seconds
@@ -182,6 +181,11 @@ class HourlyTrackerApp:
         self._style.configure(".", font=base)
         self._style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
         self._style.configure("Metric.TLabel", font=("Segoe UI", 18, "bold"))
+        self._style.configure("SecondaryMetric.TLabel", font=("Segoe UI", 14))
+        self._style.configure(
+            "TotalAwayCaption.TLabel",
+            font=("Segoe UI", 10, "bold"),
+        )
         for status in ("Working", "Idle", "Complete"):
             self._style.configure(
                 f"{status}.TLabel",
@@ -211,6 +215,18 @@ class HourlyTrackerApp:
         self._style.configure(".", font=("Segoe UI", 10))
         self._style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
         self._style.configure("Metric.TLabel", font=("Segoe UI", 18, "bold"))
+        self._style.configure(
+            "SecondaryMetric.TLabel",
+            font=("Segoe UI", 14),
+            background=palette["background"],
+            foreground=palette["foreground"],
+        )
+        self._style.configure(
+            "TotalAwayCaption.TLabel",
+            font=("Segoe UI", 10, "bold"),
+            background=palette["background"],
+            foreground=palette["foreground"],
+        )
         self._style.configure(
             ".",
             background=palette["background"],
@@ -336,7 +352,7 @@ class HourlyTrackerApp:
         main = ttk.Frame(self.root, padding=16)
         main.grid(row=0, column=0, sticky="nsew")
         main.columnconfigure(0, weight=1)
-        main.rowconfigure(4, weight=1)
+        main.rowconfigure(3, weight=2)
         main.rowconfigure(6, weight=1)
 
         header = ttk.Frame(main)
@@ -359,41 +375,80 @@ class HourlyTrackerApp:
             row=1, column=1, sticky="e", pady=(4, 0)
         )
 
-        totals = ttk.Frame(main)
-        totals.grid(row=1, column=0, sticky="ew", pady=(16, 8))
+        summary_panel = ttk.Frame(main)
+        summary_panel.grid(row=1, column=0, sticky="ew", pady=(16, 8))
+        summary_panel.columnconfigure(0, weight=1)
+
+        totals = ttk.Frame(summary_panel)
+        totals.grid(row=0, column=0, sticky="ew")
+        totals.columnconfigure(0, weight=1)
+        self.start_var = tk.StringVar()
         self.worked_var = tk.StringVar(value="0m")
         self.remaining_var = tk.StringVar(value="0m")
         self.end_var = tk.StringVar(value="—")
         self.idle_var = tk.StringVar(value="0m")
         self.offline_var = tk.StringVar(value="0m")
         self.away_var = tk.StringVar(value="0m")
+        primary = ttk.Frame(totals)
+        primary.grid(row=0, column=0, sticky="ew")
         for column, (caption, variable) in enumerate(
             (
+                ("Start", self.start_var),
+                ("Projected end", self.end_var),
                 ("Worked", self.worked_var),
                 ("Remaining", self.remaining_var),
-                ("Projected end", self.end_var),
-                ("Idle", self.idle_var),
-                ("Offline", self.offline_var),
-                ("Away", self.away_var),
             )
         ):
-            block = ttk.Frame(totals)
+            block = ttk.Frame(primary)
             block.grid(row=0, column=column, sticky="w", padx=(0, 22))
             ttk.Label(block, text=caption, style="Subtle.TLabel").grid(row=0, column=0, sticky="w")
-            ttk.Label(block, textvariable=variable, style="Metric.TLabel").grid(
+            value = ttk.Label(block, textvariable=variable, style="Metric.TLabel")
+            value.grid(row=1, column=0, sticky="w")
+            if caption == "Start":
+                self.start_label = value
+
+        ttk.Separator(totals, orient="horizontal").grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            pady=(4, 8),
+        )
+        away_totals = ttk.Frame(totals)
+        away_totals.grid(row=2, column=0, sticky="ew")
+        for column, (caption, variable, value_style) in enumerate(
+            (
+                ("Total Away", self.away_var, "Metric.TLabel"),
+                ("Idle", self.idle_var, "SecondaryMetric.TLabel"),
+                ("Offline", self.offline_var, "SecondaryMetric.TLabel"),
+            )
+        ):
+            block = ttk.Frame(away_totals)
+            block.grid(row=0, column=column, sticky="w", padx=(0, 22))
+            label_style = (
+                "TotalAwayCaption.TLabel"
+                if caption == "Total Away"
+                else "Subtle.TLabel"
+            )
+            ttk.Label(block, text=caption, style=label_style).grid(
+                row=0, column=0, sticky="w"
+            )
+            ttk.Label(block, textvariable=variable, style=value_style).grid(
                 row=1, column=0, sticky="w"
             )
 
-        settings = ttk.Frame(main)
-        settings.grid(row=2, column=0, sticky="w", pady=(8, 12))
-        ttk.Label(settings, text="Start").grid(row=0, column=0, padx=(0, 6))
-        self.start_var = tk.StringVar()
-        self.start_entry = ttk.Entry(settings, textvariable=self.start_var, width=18)
-        self.start_entry.grid(row=0, column=1, padx=(0, 16))
-        self.start_entry.bind("<FocusOut>", self._save_start)
-        self.start_entry.bind("<Return>", self._save_start)
-
-        ttk.Label(settings, text="Workday").grid(row=0, column=2, padx=(0, 6))
+        ttk.Separator(summary_panel, orient="vertical").grid(
+            row=0,
+            column=1,
+            sticky="ns",
+            padx=(12, 16),
+        )
+        settings = ttk.Frame(summary_panel)
+        settings.grid(row=0, column=2, sticky="nsw")
+        ttk.Label(
+            settings,
+            text="Workday length",
+            style="Subtle.TLabel",
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
         self.hours_var = tk.StringVar(value=f"{self.tracker.workday_hours():g}")
         self.hours_spin = ttk.Spinbox(
             settings,
@@ -404,12 +459,18 @@ class HourlyTrackerApp:
             width=6,
             command=self._save_hours,
         )
-        self.hours_spin.grid(row=0, column=3, padx=(0, 6))
-        ttk.Label(settings, text="hours").grid(row=0, column=4, padx=(0, 16))
+        self.hours_spin.grid(row=1, column=0, sticky="w", pady=(2, 8), ipady=2)
+        ttk.Label(settings, text="hours", style="Subtle.TLabel").grid(
+            row=1, column=1, sticky="w", padx=(6, 0), pady=(2, 8)
+        )
         self.hours_spin.bind("<FocusOut>", self._save_hours)
         self.hours_spin.bind("<Return>", self._save_hours)
 
-        ttk.Label(settings, text="Away after").grid(row=0, column=5, padx=(0, 6))
+        ttk.Label(
+            settings,
+            text="Away threshold",
+            style="Subtle.TLabel",
+        ).grid(row=2, column=0, columnspan=2, sticky="w")
         self.threshold_var = tk.StringVar(value=str(self.tracker.threshold_minutes()))
         self.threshold_spin = ttk.Spinbox(
             settings,
@@ -420,13 +481,15 @@ class HourlyTrackerApp:
             width=5,
             command=self._save_threshold,
         )
-        self.threshold_spin.grid(row=0, column=6, padx=(0, 6))
-        ttk.Label(settings, text="minutes").grid(row=0, column=7)
+        self.threshold_spin.grid(row=3, column=0, sticky="w", pady=(2, 0), ipady=2)
+        ttk.Label(settings, text="minutes", style="Subtle.TLabel").grid(
+            row=3, column=1, sticky="w", padx=(6, 0), pady=(2, 0)
+        )
         self.threshold_spin.bind("<FocusOut>", self._save_threshold)
         self.threshold_spin.bind("<Return>", self._save_threshold)
 
         table_header = ttk.Frame(main)
-        table_header.grid(row=3, column=0, sticky="ew")
+        table_header.grid(row=2, column=0, sticky="ew")
         ttk.Label(table_header, text="Away events", style="Title.TLabel").grid(
             row=0, column=0, sticky="w"
         )
@@ -437,13 +500,25 @@ class HourlyTrackerApp:
         ).grid(row=1, column=0, sticky="w", pady=(2, 6))
 
         columns = ("kind", "started", "ended", "duration", "counted")
+        table = ttk.Frame(main)
+        table.grid(row=3, column=0, sticky="nsew")
+        table.rowconfigure(0, weight=1)
+        table.columnconfigure(0, weight=1)
         self.tree = ttk.Treeview(
-            main,
+            table,
             columns=columns,
             show="headings",
             selectmode="browse",
+            height=8,
         )
-        self.tree.grid(row=4, column=0, sticky="nsew")
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        self.table_scrollbar = ttk.Scrollbar(
+            table,
+            orient="vertical",
+            command=self.tree.yview,
+        )
+        self.table_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=self.table_scrollbar.set)
         headings = {
             "kind": ("Type", 90),
             "started": ("Started", 180),
@@ -462,7 +537,7 @@ class HourlyTrackerApp:
         self.tree.bind("<Delete>", lambda _event: self._delete_selected())
 
         actions = ttk.Frame(main)
-        actions.grid(row=5, column=0, sticky="w", pady=(8, 12))
+        actions.grid(row=4, column=0, sticky="w", pady=(8, 12))
         self.edit_button = ttk.Button(actions, text="Edit", command=self._edit_selected)
         self.edit_button.grid(row=0, column=0, padx=(0, 8))
         self.delete_button = ttk.Button(
@@ -473,11 +548,14 @@ class HourlyTrackerApp:
         self.delete_button.grid(row=0, column=1)
         self._sync_buttons()
 
-        ttk.Label(main, text="Activity", style="Subtle.TLabel").grid(
-            row=6, column=0, sticky="nw"
+        self.activity_label = ttk.Label(
+            main,
+            text="Activity",
+            style="Subtle.TLabel",
         )
+        self.activity_label.grid(row=5, column=0, sticky="nw")
         self.log = tk.Text(main, height=6, wrap="word", state="disabled")
-        self.log.grid(row=6, column=0, sticky="nsew", pady=(18, 0))
+        self.log.grid(row=6, column=0, sticky="nsew", pady=(4, 0))
         self._log(
             "Idle is time away while the computer is on. "
             "Offline is sleep, shutdown, or this window being closed. "
@@ -617,9 +695,8 @@ class HourlyTrackerApp:
             self.idle_var.set(format_duration(summary.idle))
             self.offline_var.set(format_duration(summary.offline))
             self.away_var.set(format_duration(summary.away))
+            self.start_var.set(format_start_field(summary.start, now.date()))
             focused_widget = self.root.tk.call("focus")
-            if focused_widget != str(self.start_entry):
-                self.start_var.set(format_start_field(summary.start, now.date()))
             if focused_widget != str(self.hours_spin):
                 self.hours_var.set(f"{self.tracker.workday_hours():g}")
             if focused_widget != str(self.threshold_spin):
@@ -692,26 +769,6 @@ class HourlyTrackerApp:
             if row.id == event_id:
                 return row
         return None
-
-    def _save_start(self, *_args) -> None:
-        if self._refreshing:
-            return
-        text = self.start_var.get().strip()
-        if not text:
-            return
-        now = dt.datetime.now()
-        try:
-            start = parse_start(text, now)
-            current = self.tracker.summary(now).start
-            if start == current.replace(second=0, microsecond=0):
-                return
-            self.tracker.set_start_time(start, now=now)
-        except (TrackerError, ValueError) as exc:
-            messagebox.showerror("Hourly Tracker", str(exc), parent=self.root)
-            self.refresh()
-            return
-        self._log(f"Start time set to {text}.")
-        self.refresh()
 
     def _save_hours(self, *_args) -> None:
         if self._refreshing:
