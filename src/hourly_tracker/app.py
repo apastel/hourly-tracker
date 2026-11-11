@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
+import sqlite3
+import subprocess
+import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable
@@ -34,6 +38,94 @@ STATUS_STYLE = {
     "idle": "Idle.TLabel",
     "complete": "Complete.TLabel",
 }
+THEME_MODES = ("system", "light", "dark")
+THEME_PALETTES = {
+    "light": {
+        "background": "#f0f0f0",
+        "surface": "#ffffff",
+        "foreground": "#202020",
+        "subtle": "#5c6570",
+        "field": "#ffffff",
+        "border": "#a0a0a0",
+        "selection": "#0078d7",
+        "selection_text": "#ffffff",
+        "idle_row": "#fff8ee",
+        "offline_row": "#f3f7fb",
+        "working": "#1b7f3a",
+        "idle": "#b86e00",
+        "complete": "#1a56c4",
+    },
+    "dark": {
+        "background": "#1e1e1e",
+        "surface": "#252526",
+        "foreground": "#f1f1f1",
+        "subtle": "#b8b8b8",
+        "field": "#333333",
+        "border": "#555555",
+        "selection": "#264f78",
+        "selection_text": "#ffffff",
+        "idle_row": "#3b3024",
+        "offline_row": "#26323d",
+        "working": "#65c982",
+        "idle": "#e6ad58",
+        "complete": "#78a9f8",
+    },
+}
+
+
+def _detect_system_theme() -> str:
+    if sys.platform == "win32":
+        try:
+            import winreg
+
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+                use_light_theme, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return "light" if use_light_theme else "dark"
+        except (ImportError, OSError):
+            logging.exception("Could not read the Windows appearance setting")
+            return "light"
+
+    if sys.platform == "darwin":
+        value = _run_theme_command(
+            ["defaults", "read", "-g", "AppleInterfaceStyle"],
+        )
+        return "dark" if value and value.lower() == "dark" else "light"
+
+    if sys.platform.startswith("linux"):
+        gtk_theme = os.environ.get("GTK_THEME")
+        if gtk_theme:
+            return "dark" if "dark" in gtk_theme.lower() else "light"
+        color_scheme = _run_theme_command(
+            ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+        )
+        if color_scheme:
+            if "prefer-dark" in color_scheme.lower():
+                return "dark"
+            if "prefer-light" in color_scheme.lower():
+                return "light"
+        gtk_theme = _run_theme_command(
+            ["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"],
+        )
+        return "dark" if gtk_theme and "dark" in gtk_theme.lower() else "light"
+
+    return "light"
+
+
+def _run_theme_command(command: list[str]) -> str | None:
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip().strip("\"'")
 
 
 class HourlyTrackerApp:
@@ -58,6 +150,9 @@ class HourlyTrackerApp:
         self._log_lines = 0
         self._tray = None
         self._settings_dialog: StartupSettingsDialog | None = None
+        self._theme_preference = self._read_theme_preference()
+        self._active_theme = "light"
+        self._theme_poll_id: str | None = None
         self._hiding_to_tray = False
         self._notified_workday_day: dt.date | None = None
         self._next_workday_reminder: dt.datetime | None = None
@@ -67,6 +162,8 @@ class HourlyTrackerApp:
         self.root.geometry("860x640")
         self._configure_style()
         self._build()
+        self._apply_theme()
+        self._theme_poll_id = self.root.after(30000, self._check_system_theme)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.bind("<Unmap>", self._on_unmap)
@@ -78,31 +175,160 @@ class HourlyTrackerApp:
             self.refresh()
 
     def _configure_style(self) -> None:
-        style = ttk.Style(self.root)
-        if "vista" in style.theme_names():
-            style.theme_use("vista")
-        elif "clam" in style.theme_names():
-            style.theme_use("clam")
+        self._style = ttk.Style(self.root)
+        if "clam" in self._style.theme_names():
+            self._style.theme_use("clam")
         base = ("Segoe UI", 10)
-        style.configure(".", font=base)
-        style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
-        style.configure("Subtle.TLabel", foreground="#5c6570")
-        style.configure("Metric.TLabel", font=("Segoe UI", 18, "bold"))
-        style.configure(
-            "Working.TLabel",
-            foreground="#1b7f3a",
-            font=("Segoe UI", 16, "bold"),
+        self._style.configure(".", font=base)
+        self._style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
+        self._style.configure("Metric.TLabel", font=("Segoe UI", 18, "bold"))
+        for status in ("Working", "Idle", "Complete"):
+            self._style.configure(
+                f"{status}.TLabel",
+                font=("Segoe UI", 16, "bold"),
+            )
+
+    def _read_theme_preference(self) -> str:
+        preference = self.tracker.storage.get_setting("theme", "system")
+        return preference if preference in THEME_MODES else "system"
+
+    def _apply_theme(self, active_theme: str | None = None) -> None:
+        if active_theme is None:
+            if self._theme_preference == "system":
+                active_theme = _detect_system_theme()
+            else:
+                active_theme = self._theme_preference
+        self._active_theme = active_theme
+
+        palette = THEME_PALETTES[self._active_theme]
+        if self._active_theme == "dark" and "clam" in self._style.theme_names():
+            self._style.theme_use("clam")
+        elif self._active_theme == "light" and "vista" in self._style.theme_names():
+            self._style.theme_use("vista")
+        elif "clam" in self._style.theme_names():
+            self._style.theme_use("clam")
+
+        self._style.configure(".", font=("Segoe UI", 10))
+        self._style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
+        self._style.configure("Metric.TLabel", font=("Segoe UI", 18, "bold"))
+        self._style.configure(
+            ".",
+            background=palette["background"],
+            foreground=palette["foreground"],
         )
-        style.configure(
-            "Idle.TLabel",
-            foreground="#b86e00",
-            font=("Segoe UI", 16, "bold"),
+        self._style.configure("TFrame", background=palette["background"])
+        self._style.configure(
+            "TLabel",
+            background=palette["background"],
+            foreground=palette["foreground"],
         )
-        style.configure(
-            "Complete.TLabel",
-            foreground="#1a56c4",
-            font=("Segoe UI", 16, "bold"),
+        self._style.configure(
+            "Subtle.TLabel",
+            background=palette["background"],
+            foreground=palette["subtle"],
         )
+        for status, color in (
+            ("Working", "working"),
+            ("Idle", "idle"),
+            ("Complete", "complete"),
+        ):
+            self._style.configure(
+                f"{status}.TLabel",
+                font=("Segoe UI", 16, "bold"),
+                background=palette["background"],
+                foreground=palette[color],
+            )
+        self._style.configure(
+            "TButton",
+            background=palette["surface"],
+            foreground=palette["foreground"],
+            bordercolor=palette["border"],
+        )
+        self._style.map(
+            "TButton",
+            background=[
+                ("pressed", palette["border"]),
+                ("active", palette["field"]),
+            ],
+            foreground=[("disabled", palette["subtle"])],
+        )
+        for widget_style in ("TEntry", "TSpinbox", "TCombobox"):
+            self._style.configure(
+                widget_style,
+                fieldbackground=palette["field"],
+                foreground=palette["foreground"],
+                background=palette["surface"],
+                bordercolor=palette["border"],
+                insertcolor=palette["foreground"],
+                arrowcolor=palette["foreground"],
+            )
+            self._style.map(
+                widget_style,
+                fieldbackground=[("readonly", palette["field"])],
+                foreground=[("disabled", palette["subtle"])],
+            )
+        for widget_style in ("TCheckbutton", "TRadiobutton"):
+            self._style.configure(
+                widget_style,
+                background=palette["background"],
+                foreground=palette["foreground"],
+            )
+            self._style.map(
+                widget_style,
+                background=[("active", palette["background"])],
+                foreground=[("disabled", palette["subtle"])],
+            )
+        self._style.configure(
+            "Treeview",
+            background=palette["field"],
+            fieldbackground=palette["field"],
+            foreground=palette["foreground"],
+        )
+        self._style.map(
+            "Treeview",
+            background=[("selected", palette["selection"])],
+            foreground=[("selected", palette["selection_text"])],
+        )
+        self._style.configure(
+            "Treeview.Heading",
+            background=palette["surface"],
+            foreground=palette["foreground"],
+        )
+        self.tree.tag_configure("idle", background=palette["idle_row"])
+        self.tree.tag_configure("offline", background=palette["offline_row"])
+        self.root.configure(background=palette["background"])
+        self.log.configure(
+            background=palette["field"],
+            foreground=palette["foreground"],
+            insertbackground=palette["foreground"],
+            selectbackground=palette["selection"],
+            selectforeground=palette["selection_text"],
+            highlightbackground=palette["border"],
+        )
+
+    def _set_theme_preference(self, preference: str) -> bool:
+        if preference not in THEME_MODES:
+            raise ValueError(f"Unknown theme preference: {preference}")
+        try:
+            self.tracker.storage.set_setting("theme", preference)
+        except sqlite3.Error as exc:
+            logging.exception("Could not save appearance setting")
+            messagebox.showerror(
+                "Settings",
+                f"Could not save the appearance setting:\n{exc}",
+                parent=self.root,
+            )
+            return False
+        self._theme_preference = preference
+        self._apply_theme()
+        return True
+
+    def _check_system_theme(self) -> None:
+        if self._theme_preference == "system":
+            theme = _detect_system_theme()
+            if theme != self._active_theme:
+                self._apply_theme(theme)
+        self._theme_poll_id = self.root.after(30000, self._check_system_theme)
 
     def _build(self) -> None:
         self.root.columnconfigure(0, weight=1)
@@ -284,7 +510,9 @@ class HourlyTrackerApp:
         self._settings_dialog = StartupSettingsDialog(
             self.root,
             enabled=enabled,
+            theme=self._theme_preference,
             on_startup_change=self._set_startup_enabled,
+            on_theme_change=self._set_theme_preference,
             windows_supported=startup.is_supported(),
         )
 
@@ -389,11 +617,12 @@ class HourlyTrackerApp:
             self.idle_var.set(format_duration(summary.idle))
             self.offline_var.set(format_duration(summary.offline))
             self.away_var.set(format_duration(summary.away))
-            if self.root.focus_get() is not self.start_entry:
+            focused_widget = self.root.tk.call("focus")
+            if focused_widget != str(self.start_entry):
                 self.start_var.set(format_start_field(summary.start, now.date()))
-            if self.root.focus_get() is not self.hours_spin:
+            if focused_widget != str(self.hours_spin):
                 self.hours_var.set(f"{self.tracker.workday_hours():g}")
-            if self.root.focus_get() is not self.threshold_spin:
+            if focused_widget != str(self.threshold_spin):
                 self.threshold_var.set(str(self.tracker.threshold_minutes()))
             self._fill_tree()
         finally:
@@ -578,6 +807,9 @@ class HourlyTrackerApp:
 
     def _quit(self) -> None:
         self._polling = False
+        if self._theme_poll_id is not None:
+            self.root.after_cancel(self._theme_poll_id)
+            self._theme_poll_id = None
         if self._tray is not None:
             self._tray.stop()
         try:
@@ -593,7 +825,9 @@ class StartupSettingsDialog(tk.Toplevel):
         parent: tk.Misc,
         *,
         enabled: bool,
+        theme: str,
         on_startup_change: Callable[[bool], None],
+        on_theme_change: Callable[[str], bool],
         windows_supported: bool,
     ):
         super().__init__(parent)
@@ -601,6 +835,8 @@ class StartupSettingsDialog(tk.Toplevel):
         self.resizable(False, False)
         self.transient(parent)
         self.on_startup_change = on_startup_change
+        self.on_theme_change = on_theme_change
+        self._saved_theme = theme
         self.startup_var = tk.BooleanVar(self, value=enabled)
 
         frame = ttk.Frame(self, padding=16)
@@ -621,8 +857,21 @@ class StartupSettingsDialog(tk.Toplevel):
                 text="Startup settings are only available on Windows.",
                 style="Subtle.TLabel",
             ).grid(row=1, column=0, sticky="w")
+        ttk.Label(frame, text="Appearance").grid(
+            row=2, column=0, sticky="w", pady=(14, 4)
+        )
+        self.theme_var = tk.StringVar(self, value=theme.capitalize())
+        theme_picker = ttk.Combobox(
+            frame,
+            textvariable=self.theme_var,
+            values=("System", "Light", "Dark"),
+            state="readonly",
+            width=18,
+        )
+        theme_picker.grid(row=3, column=0, sticky="w")
+        theme_picker.bind("<<ComboboxSelected>>", self._save_theme)
         ttk.Button(frame, text="Close", command=self.destroy).grid(
-            row=2, column=0, sticky="e", pady=(16, 0)
+            row=4, column=0, sticky="e", pady=(16, 0)
         )
 
     def _save_startup(self) -> None:
@@ -631,6 +880,13 @@ class StartupSettingsDialog(tk.Toplevel):
             self.on_startup_change(enabled)
         except (OSError, RuntimeError):
             self.startup_var.set(not enabled)
+
+    def _save_theme(self, _event=None) -> None:
+        preference = self.theme_var.get().lower()
+        if self.on_theme_change(preference):
+            self._saved_theme = preference
+        else:
+            self.theme_var.set(self._saved_theme.capitalize())
 
 
 class EditAwayDialog(tk.Toplevel):

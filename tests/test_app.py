@@ -15,7 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 try:
     import tkinter as tk
 
-    from hourly_tracker.app import HourlyTrackerApp, StartupSettingsDialog
+    from hourly_tracker.app import (
+        HourlyTrackerApp,
+        StartupSettingsDialog,
+        _detect_system_theme,
+    )
 except Exception as exc:  # pragma: no cover - depends on the local Python build
     tk = None
     IMPORT_ERROR = exc
@@ -29,6 +33,91 @@ from hourly_tracker.tracker import Tracker
 
 @unittest.skipIf(tk is None, f"tkinter unavailable: {IMPORT_ERROR}")
 class AwayTableTest(unittest.TestCase):
+    def test_windows_system_theme_uses_apps_appearance_setting(self):
+        key = mock.MagicMock()
+        open_key = mock.MagicMock()
+        open_key.__enter__.return_value = key
+        winreg = SimpleNamespace(
+            HKEY_CURRENT_USER=object(),
+            OpenKey=mock.Mock(return_value=open_key),
+            QueryValueEx=mock.Mock(return_value=(0, 4)),
+        )
+        with (
+            mock.patch("hourly_tracker.app.sys.platform", "win32"),
+            mock.patch.dict(sys.modules, {"winreg": winreg}),
+        ):
+            self.assertEqual(_detect_system_theme(), "dark")
+        winreg.OpenKey.assert_called_once()
+        winreg.QueryValueEx.assert_called_once_with(key, "AppsUseLightTheme")
+
+    def test_dark_theme_uses_light_control_arrows(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "arrows.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        app._apply_theme("dark")
+
+        self.assertEqual(app._style.lookup("TSpinbox", "arrowcolor"), "#f1f1f1")
+        self.assertEqual(app._style.lookup("TCombobox", "arrowcolor"), "#f1f1f1")
+
+    def test_appearance_setting_defaults_to_system_and_updates_live(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "appearance.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        with (
+            mock.patch("hourly_tracker.app._detect_system_theme", return_value="dark"),
+            mock.patch("hourly_tracker.app.startup.is_supported", return_value=False),
+        ):
+            app = HourlyTrackerApp(root, tracker, auto_poll=False)
+            self.assertEqual(storage.get_setting("theme"), None)
+            self.assertEqual(app._theme_preference, "system")
+            self.assertEqual(app._active_theme, "dark")
+
+            app._open_settings()
+            self.assertEqual(app._settings_dialog.theme_var.get(), "System")
+            app._settings_dialog.theme_var.set("Light")
+            app._settings_dialog._save_theme()
+            self.assertEqual(storage.get_setting("theme"), "light")
+            self.assertEqual(app._active_theme, "light")
+
+            app._settings_dialog.theme_var.set("System")
+            app._settings_dialog._save_theme()
+            self.assertEqual(storage.get_setting("theme"), "system")
+            self.assertEqual(app._active_theme, "dark")
+            app._settings_dialog.destroy()
+
+    def test_refresh_does_not_resolve_nonstandard_tk_focus_as_widget(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "focus.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        with mock.patch.object(
+            root,
+            "focus_get",
+            side_effect=KeyError("popdown"),
+        ):
+            app.refresh()
+
     def test_settings_window_saves_windows_startup_preference(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

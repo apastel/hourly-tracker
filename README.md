@@ -17,7 +17,7 @@ Minimizing or closing the window sends it to the system tray while idle tracking
 
 When the projected workday ends, Windows displays a desktop notification. If work continues past the end time, the notification repeats every 20 minutes.
 
-Open **Settings** from the main window to enable or disable starting Hourly Tracker when you sign in to Windows. This option is stored in your per-user Windows startup settings and is available only on Windows.
+Open **Settings** from the main window to choose **System**, **Light**, or **Dark** appearance. System is the default and follows the operating system's appearance. The Windows startup option in the same dialog enables or disables starting Hourly Tracker when you sign in; it is available only on Windows.
 
 ## Build a Windows installer
 
