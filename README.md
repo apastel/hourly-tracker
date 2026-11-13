@@ -13,7 +13,7 @@ A break shorter than the away threshold (20 minutes by default, same idea as the
 
 Idle and offline periods are rows in the away table. **Extends day** is the part of a row after your start time, and that is the part that pushes your finish later. Edit a row to fix its type or its start and end. Delete a row to put that time back into hours worked. The projected end moves earlier by the same amount.
 
-Minimizing or closing the window sends it to the system tray while idle tracking keeps running. Double-click the tray icon to reopen it. Use the tray menu to reopen or quit the app. Quitting stops tracking and the next launch records the time in between as offline once it passes the threshold.
+Minimizing the window keeps it on the taskbar while idle tracking keeps running. The **X** button minimizes to the system tray by default; change it to quit in **Settings**. Double-click the tray icon to reopen the app, or use the tray menu to reopen or quit. Quitting stops tracking and the next launch records the time in between as offline once it passes the threshold.
 
 When the projected workday ends, Windows displays a desktop notification. If work continues past the end time, the notification repeats every 20 minutes.
 

@@ -180,6 +180,61 @@ class AwayTableTest(unittest.TestCase):
             self.assertEqual(app._active_theme, "dark")
             app._settings_dialog.destroy()
 
+    def test_close_setting_persists_and_controls_close_button(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "close-setting.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        with mock.patch("hourly_tracker.app.startup.is_supported", return_value=False):
+            app._open_settings()
+        self.assertEqual(storage.get_setting("close_behavior"), None)
+        self.assertEqual(
+            app._settings_dialog.close_behavior_var.get(),
+            "Minimize to tray",
+        )
+        app._settings_dialog.close_behavior_var.set("Quit Hourly Tracker")
+        app._settings_dialog._save_close_behavior()
+        self.assertEqual(storage.get_setting("close_behavior"), "quit")
+        self.assertEqual(app._close_behavior, "quit")
+
+        app._tray = object()
+        with (
+            mock.patch.object(app, "_quit") as quit_app,
+            mock.patch.object(app, "_minimize_to_tray") as minimize_to_tray,
+        ):
+            app._on_close()
+            quit_app.assert_called_once()
+            minimize_to_tray.assert_not_called()
+
+            app._settings_dialog.close_behavior_var.set("Minimize to tray")
+            app._settings_dialog._save_close_behavior()
+            quit_app.reset_mock()
+            app._on_close()
+            minimize_to_tray.assert_called_once()
+            quit_app.assert_not_called()
+        app._settings_dialog.destroy()
+
+    def test_minimize_is_not_redirected_to_tray(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "minimize.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        self.assertFalse(root.bind("<Unmap>"))
+
     def test_refresh_does_not_resolve_nonstandard_tk_focus_as_widget(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

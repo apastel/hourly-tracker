@@ -150,9 +150,9 @@ class HourlyTrackerApp:
         self._tray = None
         self._settings_dialog: StartupSettingsDialog | None = None
         self._theme_preference = self._read_theme_preference()
+        self._close_behavior = self._read_close_behavior()
         self._active_theme = "light"
         self._theme_poll_id: str | None = None
-        self._hiding_to_tray = False
         self._notified_workday_day: dt.date | None = None
         self._next_workday_reminder: dt.datetime | None = None
 
@@ -165,7 +165,6 @@ class HourlyTrackerApp:
         self._theme_poll_id = self.root.after(30000, self._check_system_theme)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.root.bind("<Unmap>", self._on_unmap)
         self.root.after(100, self._start_tray)
         self._refreshing = False
         if auto_poll:
@@ -195,6 +194,10 @@ class HourlyTrackerApp:
     def _read_theme_preference(self) -> str:
         preference = self.tracker.storage.get_setting("theme", "system")
         return preference if preference in THEME_MODES else "system"
+
+    def _read_close_behavior(self) -> str:
+        behavior = self.tracker.storage.get_setting("close_behavior", "tray")
+        return behavior if behavior in ("tray", "quit") else "tray"
 
     def _apply_theme(self, active_theme: str | None = None) -> None:
         if active_theme is None:
@@ -337,6 +340,22 @@ class HourlyTrackerApp:
             return False
         self._theme_preference = preference
         self._apply_theme()
+        return True
+
+    def _set_close_behavior(self, behavior: str) -> bool:
+        if behavior not in ("tray", "quit"):
+            raise ValueError(f"Unknown close behavior: {behavior}")
+        try:
+            self.tracker.storage.set_setting("close_behavior", behavior)
+        except sqlite3.Error as exc:
+            logging.exception("Could not save close button setting")
+            messagebox.showerror(
+                "Settings",
+                f"Could not save the close button setting:\n{exc}",
+                parent=self.root,
+            )
+            return False
+        self._close_behavior = behavior
         return True
 
     def _check_system_theme(self) -> None:
@@ -589,8 +608,10 @@ class HourlyTrackerApp:
             self.root,
             enabled=enabled,
             theme=self._theme_preference,
+            close_behavior=self._close_behavior,
             on_startup_change=self._set_startup_enabled,
             on_theme_change=self._set_theme_preference,
+            on_close_behavior_change=self._set_close_behavior,
             windows_supported=startup.is_supported(),
         )
 
@@ -620,16 +641,8 @@ class HourlyTrackerApp:
         except Exception:
             logging.exception("System tray could not be started")
 
-    def _on_unmap(self, _event=None) -> None:
-        if self._hiding_to_tray:
-            return
-        if self.root.state() == "iconic":
-            self.root.after_idle(self._minimize_to_tray)
-
     def _minimize_to_tray(self) -> None:
-        self._hiding_to_tray = True
         self.root.withdraw()
-        self._hiding_to_tray = False
         self._start_tray()
 
     def show_from_tray(self) -> None:
@@ -857,8 +870,8 @@ class HourlyTrackerApp:
         self.log.see("end")
 
     def _on_close(self) -> None:
-        if self._tray is not None:
-            self.root.iconify()
+        if self._close_behavior == "tray" and self._tray is not None:
+            self._minimize_to_tray()
             return
         self._quit()
 
@@ -883,8 +896,10 @@ class StartupSettingsDialog(tk.Toplevel):
         *,
         enabled: bool,
         theme: str,
+        close_behavior: str,
         on_startup_change: Callable[[bool], None],
         on_theme_change: Callable[[str], bool],
+        on_close_behavior_change: Callable[[str], bool],
         windows_supported: bool,
     ):
         super().__init__(parent)
@@ -893,7 +908,9 @@ class StartupSettingsDialog(tk.Toplevel):
         self.transient(parent)
         self.on_startup_change = on_startup_change
         self.on_theme_change = on_theme_change
+        self.on_close_behavior_change = on_close_behavior_change
         self._saved_theme = theme
+        self._saved_close_behavior = close_behavior
         self.startup_var = tk.BooleanVar(self, value=enabled)
 
         frame = ttk.Frame(self, padding=16)
@@ -914,8 +931,26 @@ class StartupSettingsDialog(tk.Toplevel):
                 text="Startup settings are only available on Windows.",
                 style="Subtle.TLabel",
             ).grid(row=1, column=0, sticky="w")
-        ttk.Label(frame, text="Appearance").grid(
+        ttk.Label(frame, text="When I click the close button").grid(
             row=2, column=0, sticky="w", pady=(14, 4)
+        )
+        self.close_behavior_var = tk.StringVar(
+            self,
+            value=self._close_behavior_label(close_behavior),
+        )
+        close_behavior_picker = ttk.Combobox(
+            frame,
+            textvariable=self.close_behavior_var,
+            values=("Minimize to tray", "Quit Hourly Tracker"),
+            state="readonly",
+            width=22,
+        )
+        close_behavior_picker.grid(row=3, column=0, sticky="w")
+        close_behavior_picker.bind(
+            "<<ComboboxSelected>>", self._save_close_behavior
+        )
+        ttk.Label(frame, text="Appearance").grid(
+            row=4, column=0, sticky="w", pady=(14, 4)
         )
         self.theme_var = tk.StringVar(self, value=theme.capitalize())
         theme_picker = ttk.Combobox(
@@ -925,11 +960,15 @@ class StartupSettingsDialog(tk.Toplevel):
             state="readonly",
             width=18,
         )
-        theme_picker.grid(row=3, column=0, sticky="w")
+        theme_picker.grid(row=5, column=0, sticky="w")
         theme_picker.bind("<<ComboboxSelected>>", self._save_theme)
         ttk.Button(frame, text="Close", command=self.destroy).grid(
-            row=4, column=0, sticky="e", pady=(16, 0)
+            row=6, column=0, sticky="e", pady=(16, 0)
         )
+
+    @staticmethod
+    def _close_behavior_label(behavior: str) -> str:
+        return "Minimize to tray" if behavior == "tray" else "Quit Hourly Tracker"
 
     def _save_startup(self) -> None:
         enabled = self.startup_var.get()
@@ -944,6 +983,19 @@ class StartupSettingsDialog(tk.Toplevel):
             self._saved_theme = preference
         else:
             self.theme_var.set(self._saved_theme.capitalize())
+
+    def _save_close_behavior(self, _event=None) -> None:
+        behavior = (
+            "tray"
+            if self.close_behavior_var.get() == "Minimize to tray"
+            else "quit"
+        )
+        if self.on_close_behavior_change(behavior):
+            self._saved_close_behavior = behavior
+        else:
+            self.close_behavior_var.set(
+                self._close_behavior_label(self._saved_close_behavior)
+            )
 
 
 class EditAwayDialog(tk.Toplevel):
