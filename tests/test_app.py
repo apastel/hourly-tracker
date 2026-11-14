@@ -12,6 +12,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from hourly_tracker import __version__
+
 try:
     import tkinter as tk
 
@@ -20,6 +22,7 @@ try:
         NotificationPreferences,
         NotificationRule,
         StartupSettingsDialog,
+        THEME_PALETTES,
         _detect_system_theme,
     )
 except Exception as exc:  # pragma: no cover - depends on the local Python build
@@ -34,6 +37,27 @@ from hourly_tracker.tracker import Tracker
 
 @unittest.skipIf(tk is None, f"tkinter unavailable: {IMPORT_ERROR}")
 class AwayTableTest(unittest.TestCase):
+    def test_version_is_shown_faintly_in_the_footer(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "version.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        self.assertEqual(app.version_label.cget("text"), f"v{__version__}")
+        self.assertEqual(app.version_label.cget("style"), "Version.TLabel")
+        self.assertEqual(int(app.version_label.grid_info()["row"]), 7)
+        self.assertEqual(app.version_label.grid_info()["sticky"], "e")
+        self.assertEqual(
+            app._style.lookup("Version.TLabel", "foreground"),
+            THEME_PALETTES[app._active_theme]["subtle"],
+        )
+
     def test_start_time_is_shown_read_only(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

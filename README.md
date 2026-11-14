@@ -9,6 +9,8 @@ A break shorter than the away threshold (20 minutes by default, same idea as the
 
 `start + workday length + idle + offline`
 
+The current package version appears subtly in the bottom-right corner of the main window.
+
 ## Correcting a bad away event
 
 Idle and offline periods are rows in the away table. **Extends day** is the part of a row after your start time, and that is the part that pushes your finish later. Edit a row to fix its type or its start and end. Delete a row to put that time back into hours worked. The projected end moves earlier by the same amount.
@@ -49,6 +51,8 @@ The frozen app is built without UPX packing, which can reduce false antivirus de
 ## Dependency updates
 
 Dependabot checks Python packages and GitHub Actions weekly and opens pull requests for updates. Pull requests run the test suite and build the Windows installer. `uv.lock` records the resolved dependency versions used by these builds. When changing dependency requirements in `pyproject.toml`, regenerate and commit the lockfile with `uv lock`.
+
+The installed package version is derived from Git tags. A checkout exactly on `v1.2.0` reports `1.2.0`; later commits report a PEP 440 development version such as `1.2.1.dev8+gabcdef1234`. Builds need the relevant tags and history, so the installer workflow fetches full Git history. Source trees without usable Git or packaged metadata use the `0.0.0` fallback.
 
 The database is separate from the original Hourly Tracker settings:
 

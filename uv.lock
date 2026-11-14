@@ -13,7 +13,6 @@ wheels = [
 
 [[package]]
 name = "hourly-tracker"
-version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "pillow" },

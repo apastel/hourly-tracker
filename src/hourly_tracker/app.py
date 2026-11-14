@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from tkinter import messagebox, ttk
 from typing import Callable
 
-from hourly_tracker import startup
+from hourly_tracker import __version__, startup
 from hourly_tracker.formatting import (
     format_clock,
     format_day,
@@ -341,6 +341,12 @@ class HourlyTrackerApp:
         )
         self._style.configure(
             "Subtle.TLabel",
+            background=palette["background"],
+            foreground=palette["subtle"],
+        )
+        self._style.configure(
+            "Version.TLabel",
+            font=("Segoe UI", 8),
             background=palette["background"],
             foreground=palette["subtle"],
         )
@@ -693,6 +699,12 @@ class HourlyTrackerApp:
         self.activity_label.grid(row=5, column=0, sticky="nw")
         self.log = tk.Text(main, height=6, wrap="word", state="disabled")
         self.log.grid(row=6, column=0, sticky="nsew", pady=(4, 0))
+        self.version_label = ttk.Label(
+            main,
+            text=f"v{__version__}",
+            style="Version.TLabel",
+        )
+        self.version_label.grid(row=7, column=0, sticky="e", pady=(8, 0))
         self._log(
             "Idle is time away while the computer is on. "
             "Offline is sleep, shutdown, or this window being closed. "

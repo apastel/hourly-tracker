@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
 
 project_root = Path(SPECPATH).resolve().parents[1]
 src = project_root / "src"
@@ -11,7 +11,10 @@ a = Analysis(
     [str(src / "hourly_tracker" / "__main__.py")],
     pathex=[str(src)],
     binaries=[],
-    datas=[(str(tray_icon), "hourly_tracker/assets")],
+    datas=[
+        (str(tray_icon), "hourly_tracker/assets"),
+        *copy_metadata("hourly-tracker"),
+    ],
     hiddenimports=collect_submodules("pystray") + collect_submodules("winotify"),
     hookspath=[],
     hooksconfig={},

@@ -1,6 +1,6 @@
 [project]
 name = "hourly-tracker"
-version = "2.0.0"
+dynamic = ["version"]
 description = "Track a workday, splitting away time into idle and offline"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,5 +29,8 @@ where = ["src"]
 hourly_tracker = ["assets/*.png"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=80", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0"
