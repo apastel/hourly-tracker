@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import os
 import sqlite3
 import subprocess
 import sys
 import tkinter as tk
+from dataclasses import dataclass
 from tkinter import messagebox, ttk
 from typing import Callable
 
@@ -38,6 +40,8 @@ STATUS_STYLE = {
     "complete": "Complete.TLabel",
 }
 THEME_MODES = ("system", "light", "dark")
+NOTIFICATION_UNITS = ("minutes", "hours")
+NOTIFICATION_TIMINGS = ("before", "after")
 THEME_PALETTES = {
     "light": {
         "background": "#f0f0f0",
@@ -70,6 +74,83 @@ THEME_PALETTES = {
         "complete": "#78a9f8",
     },
 }
+
+
+@dataclass(frozen=True)
+class NotificationRule:
+    amount: int
+    unit: str
+    timing: str
+    repeat: bool = False
+
+
+@dataclass(frozen=True)
+class NotificationPreferences:
+    notify_on_complete: bool = True
+    rules: tuple[NotificationRule, ...] = ()
+
+
+@dataclass
+class NotificationRuleWidgets:
+    frame: ttk.Frame
+    amount_var: tk.StringVar
+    unit_var: tk.StringVar
+    timing_var: tk.StringVar
+    repeat_var: tk.BooleanVar
+    repeat_button: ttk.Checkbutton
+
+
+def _serialize_notification_preferences(
+    preferences: NotificationPreferences,
+) -> str:
+    return json.dumps(
+        {
+            "notify_on_complete": preferences.notify_on_complete,
+            "rules": [
+                {
+                    "amount": rule.amount,
+                    "unit": rule.unit,
+                    "timing": rule.timing,
+                    "repeat": rule.repeat,
+                }
+                for rule in preferences.rules
+            ],
+        }
+    )
+
+
+def _parse_notification_preferences(raw: str) -> NotificationPreferences:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Invalid notification settings data") from exc
+    if not isinstance(value, dict):
+        raise ValueError("Notification settings must be an object")
+
+    notify_on_complete = value.get("notify_on_complete")
+    rules_value = value.get("rules")
+    if type(notify_on_complete) is not bool or not isinstance(rules_value, list):
+        raise ValueError("Notification settings have invalid fields")
+
+    rules: list[NotificationRule] = []
+    for rule in rules_value:
+        if not isinstance(rule, dict):
+            raise ValueError("A notification rule must be an object")
+        amount = rule.get("amount")
+        unit = rule.get("unit")
+        timing = rule.get("timing")
+        repeat = rule.get("repeat")
+        if (
+            type(amount) is not int
+            or not 1 <= amount <= 999
+            or unit not in NOTIFICATION_UNITS
+            or timing not in NOTIFICATION_TIMINGS
+            or type(repeat) is not bool
+            or (timing == "before" and repeat)
+        ):
+            raise ValueError("A notification rule has invalid fields")
+        rules.append(NotificationRule(amount, unit, timing, repeat))
+    return NotificationPreferences(notify_on_complete, tuple(rules))
 
 
 def _detect_system_theme() -> str:
@@ -151,10 +232,17 @@ class HourlyTrackerApp:
         self._settings_dialog: StartupSettingsDialog | None = None
         self._theme_preference = self._read_theme_preference()
         self._close_behavior = self._read_close_behavior()
+        self._notification_preferences = self._read_notification_preferences()
         self._active_theme = "light"
         self._theme_poll_id: str | None = None
         self._notified_workday_day: dt.date | None = None
-        self._next_workday_reminder: dt.datetime | None = None
+        self._notification_state_day: dt.date | None = None
+        self._fired_notification_rules: set[
+            tuple[int, int, str, str]
+        ] = set()
+        self._next_notification_times: dict[
+            tuple[int, int, str, str], dt.datetime
+        ] = {}
 
         self.root.title("Hourly Tracker")
         self.root.minsize(760, 560)
@@ -198,6 +286,16 @@ class HourlyTrackerApp:
     def _read_close_behavior(self) -> str:
         behavior = self.tracker.storage.get_setting("close_behavior", "tray")
         return behavior if behavior in ("tray", "quit") else "tray"
+
+    def _read_notification_preferences(self) -> NotificationPreferences:
+        raw = self.tracker.storage.get_setting("notifications")
+        if raw is None:
+            return NotificationPreferences()
+        try:
+            return _parse_notification_preferences(raw)
+        except ValueError as exc:
+            logging.warning("Invalid notification settings; using defaults: %s", exc)
+            return NotificationPreferences()
 
     def _apply_theme(self, active_theme: str | None = None) -> None:
         if active_theme is None:
@@ -356,6 +454,26 @@ class HourlyTrackerApp:
             )
             return False
         self._close_behavior = behavior
+        return True
+
+    def _set_notification_preferences(
+        self,
+        preferences: NotificationPreferences,
+    ) -> bool:
+        try:
+            self.tracker.storage.set_setting(
+                "notifications",
+                _serialize_notification_preferences(preferences),
+            )
+        except sqlite3.Error as exc:
+            logging.exception("Could not save notification settings")
+            messagebox.showerror(
+                "Settings",
+                f"Could not save notification settings:\n{exc}",
+                parent=self.root,
+            )
+            return False
+        self._notification_preferences = preferences
         return True
 
     def _check_system_theme(self) -> None:
@@ -609,9 +727,11 @@ class HourlyTrackerApp:
             enabled=enabled,
             theme=self._theme_preference,
             close_behavior=self._close_behavior,
+            notification_preferences=self._notification_preferences,
             on_startup_change=self._set_startup_enabled,
             on_theme_change=self._set_theme_preference,
             on_close_behavior_change=self._set_close_behavior,
+            on_notification_change=self._set_notification_preferences,
             windows_supported=startup.is_supported(),
         )
 
@@ -719,28 +839,74 @@ class HourlyTrackerApp:
             self._refreshing = False
 
     def _update_workday_notifications(self, now: dt.datetime, summary) -> None:
-        if now < summary.projected_end:
-            return
+        if self._notification_state_day != summary.day:
+            self._notification_state_day = summary.day
+            self._fired_notification_rules.clear()
+            self._next_notification_times.clear()
 
-        notification = (
-            "Workday complete",
-            f"Your workday was completed at {format_clock(summary.projected_end)}. "
-            "Time to stop working.",
-        )
-
-        if self._notified_workday_day != summary.day:
-            show_desktop_notification(*notification)
-            self._notified_workday_day = summary.day
-            self._next_workday_reminder = now + dt.timedelta(minutes=20)
-            return
-
+        workday_end = summary.projected_end
         if (
-            self._next_workday_reminder is not None
-            and now >= self._next_workday_reminder
+            now >= workday_end
+            and self._notification_preferences.notify_on_complete
+            and self._notified_workday_day != summary.day
         ):
-            show_desktop_notification(*notification)
-            while now >= self._next_workday_reminder:
-                self._next_workday_reminder += dt.timedelta(minutes=20)
+            show_desktop_notification(
+                "Workday complete",
+                f"Your workday was completed at {format_clock(workday_end)}. "
+                "Time to stop working.",
+            )
+            self._notified_workday_day = summary.day
+
+        for index, rule in enumerate(self._notification_preferences.rules):
+            interval = (
+                dt.timedelta(minutes=rule.amount)
+                if rule.unit == "minutes"
+                else dt.timedelta(hours=rule.amount)
+            )
+            rule_key = (index, rule.amount, rule.unit, rule.timing)
+            if rule.timing == "before":
+                notification_time = workday_end - interval
+                if (
+                    now < workday_end
+                    and now >= notification_time
+                    and rule_key not in self._fired_notification_rules
+                ):
+                    unit = rule.unit[:-1] if rule.amount == 1 else rule.unit
+                    show_desktop_notification(
+                        "Workday ending soon",
+                        f"Your workday is expected to complete at "
+                        f"{format_clock(workday_end)} "
+                        f"({rule.amount} {unit} before completion).",
+                    )
+                    self._fired_notification_rules.add(rule_key)
+            else:
+                first_notification = workday_end + interval
+                if now < first_notification:
+                    continue
+                if rule.repeat:
+                    next_notification = self._next_notification_times.get(
+                        rule_key,
+                        first_notification,
+                    )
+                    if now < next_notification:
+                        continue
+                    show_desktop_notification(
+                        "Workday complete",
+                        f"Your workday was completed at {format_clock(workday_end)}. "
+                        "Time to stop working.",
+                    )
+                    missed_intervals = (now - next_notification) // interval
+                    self._next_notification_times[rule_key] = (
+                        next_notification + interval * (missed_intervals + 1)
+                    )
+                    self._fired_notification_rules.add(rule_key)
+                elif rule_key not in self._fired_notification_rules:
+                    show_desktop_notification(
+                        "Workday complete",
+                        f"Your workday was completed at {format_clock(workday_end)}. "
+                        "Time to stop working.",
+                    )
+                    self._fired_notification_rules.add(rule_key)
 
     def _fill_tree(self) -> None:
         selected = self.tree.selection()
@@ -897,24 +1063,31 @@ class StartupSettingsDialog(tk.Toplevel):
         enabled: bool,
         theme: str,
         close_behavior: str,
+        notification_preferences: NotificationPreferences,
         on_startup_change: Callable[[bool], None],
         on_theme_change: Callable[[str], bool],
         on_close_behavior_change: Callable[[str], bool],
+        on_notification_change: Callable[[NotificationPreferences], bool],
         windows_supported: bool,
     ):
         super().__init__(parent)
         self.title("Settings")
-        self.resizable(False, False)
+        self.resizable(False, True)
         self.transient(parent)
+        self.protocol("WM_DELETE_WINDOW", self._close_dialog)
         self.on_startup_change = on_startup_change
         self.on_theme_change = on_theme_change
         self.on_close_behavior_change = on_close_behavior_change
+        self.on_notification_change = on_notification_change
         self._saved_theme = theme
         self._saved_close_behavior = close_behavior
+        self._saved_notification_preferences = notification_preferences
+        self._notification_rows: list[NotificationRuleWidgets] = []
         self.startup_var = tk.BooleanVar(self, value=enabled)
 
         frame = ttk.Frame(self, padding=16)
         frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
         ttk.Label(frame, text="Settings", style="Title.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 12)
         )
@@ -962,8 +1135,29 @@ class StartupSettingsDialog(tk.Toplevel):
         )
         theme_picker.grid(row=5, column=0, sticky="w")
         theme_picker.bind("<<ComboboxSelected>>", self._save_theme)
-        ttk.Button(frame, text="Close", command=self.destroy).grid(
-            row=6, column=0, sticky="e", pady=(16, 0)
+
+        notifications = ttk.LabelFrame(frame, text="Notifications", padding=8)
+        notifications.grid(row=6, column=0, sticky="ew", pady=(14, 0))
+        self.notification_complete_var = tk.BooleanVar(self)
+        ttk.Checkbutton(
+            notifications,
+            text="Notify when workday is complete",
+            variable=self.notification_complete_var,
+            command=self._save_notification_preferences,
+        ).grid(row=0, column=0, sticky="w")
+        self.notification_rows_frame = ttk.Frame(notifications)
+        self.notification_rows_frame.grid(
+            row=1, column=0, sticky="ew", pady=(6, 0)
+        )
+        ttk.Button(
+            notifications,
+            text="Add notification",
+            command=self._add_notification_rule,
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+        self._render_notification_preferences(notification_preferences)
+
+        ttk.Button(frame, text="Close", command=self._close_dialog).grid(
+            row=7, column=0, sticky="e", pady=(16, 0)
         )
 
     @staticmethod
@@ -996,6 +1190,203 @@ class StartupSettingsDialog(tk.Toplevel):
             self.close_behavior_var.set(
                 self._close_behavior_label(self._saved_close_behavior)
             )
+
+    def _render_notification_preferences(
+        self,
+        preferences: NotificationPreferences,
+    ) -> None:
+        self.notification_complete_var.set(preferences.notify_on_complete)
+        for row in self._notification_rows:
+            row.frame.destroy()
+        self._notification_rows.clear()
+        for rule in preferences.rules:
+            self._create_notification_rule_row(rule)
+
+    def _create_notification_rule_row(
+        self,
+        rule: NotificationRule,
+    ) -> None:
+        row_frame = ttk.Frame(self.notification_rows_frame)
+        row_frame.grid(
+            row=len(self._notification_rows),
+            column=0,
+            sticky="ew",
+            pady=(0, 4),
+        )
+        amount_var = tk.StringVar(self, value=str(rule.amount))
+        amount_spinbox = ttk.Spinbox(
+            row_frame,
+            from_=1,
+            to=999,
+            textvariable=amount_var,
+            width=5,
+        )
+        amount_spinbox.grid(row=0, column=0, sticky="w")
+        unit_var = tk.StringVar(self, value=rule.unit.capitalize())
+        unit_picker = ttk.Combobox(
+            row_frame,
+            textvariable=unit_var,
+            values=("Minutes", "Hours"),
+            state="readonly",
+            width=8,
+        )
+        unit_picker.grid(row=0, column=1, padx=(4, 0))
+        timing_var = tk.StringVar(
+            self,
+            value=(
+                "Before workday completes"
+                if rule.timing == "before"
+                else "After workday completes"
+            ),
+        )
+        timing_picker = ttk.Combobox(
+            row_frame,
+            textvariable=timing_var,
+            values=(
+                "Before workday completes",
+                "After workday completes",
+            ),
+            state="readonly",
+            width=27,
+        )
+        timing_picker.grid(row=0, column=2, padx=(4, 0))
+        repeat_var = tk.BooleanVar(self, value=rule.repeat)
+        repeat_button = ttk.Checkbutton(
+            row_frame,
+            text="Repeat",
+            variable=repeat_var,
+            command=self._save_notification_preferences,
+        )
+        repeat_button.grid(row=0, column=3, padx=(4, 0))
+        row = NotificationRuleWidgets(
+            row_frame,
+            amount_var,
+            unit_var,
+            timing_var,
+            repeat_var,
+            repeat_button,
+        )
+        self._notification_rows.append(row)
+        ttk.Button(
+            row_frame,
+            text="Remove",
+            command=lambda item=row: self._remove_notification_rule(item),
+        ).grid(row=0, column=4, padx=(4, 0))
+        amount_spinbox.bind("<FocusOut>", self._save_notification_preferences)
+        amount_spinbox.bind("<Return>", self._save_notification_preferences)
+        unit_picker.bind(
+            "<<ComboboxSelected>>",
+            self._save_notification_preferences,
+        )
+        timing_picker.bind(
+            "<<ComboboxSelected>>",
+            lambda _event, item=row: self._notification_timing_changed(item),
+        )
+        self._update_repeat_control(row)
+
+    def _update_repeat_control(self, row: NotificationRuleWidgets) -> None:
+        is_after = row.timing_var.get() == "After workday completes"
+        row.repeat_button.configure(state="normal" if is_after else "disabled")
+        if not is_after:
+            row.repeat_var.set(False)
+
+    def _notification_timing_changed(
+        self,
+        row: NotificationRuleWidgets,
+    ) -> None:
+        self._update_repeat_control(row)
+        self._save_notification_preferences()
+
+    def _collect_notification_preferences(
+        self,
+        exclude: NotificationRuleWidgets | None = None,
+    ) -> NotificationPreferences:
+        rules: list[NotificationRule] = []
+        for row in self._notification_rows:
+            if row is exclude:
+                continue
+            try:
+                amount = int(row.amount_var.get().strip())
+            except ValueError as exc:
+                raise ValueError(
+                    "Notification amounts must be whole numbers."
+                ) from exc
+            if not 1 <= amount <= 999:
+                raise ValueError("Notification amounts must be from 1 to 999.")
+            unit = row.unit_var.get().lower()
+            timing_label = row.timing_var.get()
+            timing = (
+                "before"
+                if timing_label == "Before workday completes"
+                else "after"
+            )
+            if unit not in NOTIFICATION_UNITS:
+                raise ValueError("Choose minutes or hours for each notification.")
+            rules.append(
+                NotificationRule(
+                    amount,
+                    unit,
+                    timing,
+                    row.repeat_var.get() and timing == "after",
+                )
+            )
+        return NotificationPreferences(
+            self.notification_complete_var.get(),
+            tuple(rules),
+        )
+
+    def _apply_notification_preferences(
+        self,
+        preferences: NotificationPreferences,
+    ) -> bool:
+        if self.on_notification_change(preferences):
+            self._saved_notification_preferences = preferences
+            return True
+        self._render_notification_preferences(
+            self._saved_notification_preferences
+        )
+        return False
+
+    def _save_notification_preferences(self, _event=None) -> bool:
+        try:
+            preferences = self._collect_notification_preferences()
+        except ValueError as exc:
+            messagebox.showerror(
+                "Notifications",
+                str(exc),
+                parent=self,
+            )
+            return False
+        return self._apply_notification_preferences(preferences)
+
+    def _add_notification_rule(self) -> None:
+        try:
+            current = self._collect_notification_preferences()
+        except ValueError as exc:
+            messagebox.showerror("Notifications", str(exc), parent=self)
+            return
+        preferences = NotificationPreferences(
+            current.notify_on_complete,
+            current.rules + (NotificationRule(15, "minutes", "before"),),
+        )
+        if self._apply_notification_preferences(preferences):
+            self._render_notification_preferences(preferences)
+
+    def _remove_notification_rule(
+        self,
+        row: NotificationRuleWidgets,
+    ) -> None:
+        try:
+            preferences = self._collect_notification_preferences(exclude=row)
+        except ValueError as exc:
+            messagebox.showerror("Notifications", str(exc), parent=self)
+            return
+        if self._apply_notification_preferences(preferences):
+            self._render_notification_preferences(preferences)
+
+    def _close_dialog(self) -> None:
+        if self._save_notification_preferences():
+            self.destroy()
 
 
 class EditAwayDialog(tk.Toplevel):

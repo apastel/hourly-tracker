@@ -17,6 +17,8 @@ try:
 
     from hourly_tracker.app import (
         HourlyTrackerApp,
+        NotificationPreferences,
+        NotificationRule,
         StartupSettingsDialog,
         _detect_system_theme,
     )
@@ -26,7 +28,6 @@ except Exception as exc:  # pragma: no cover - depends on the local Python build
 else:
     IMPORT_ERROR = None
 
-from hourly_tracker.formatting import format_clock
 from hourly_tracker.storage import Storage
 from hourly_tracker.tracker import Tracker
 
@@ -279,7 +280,51 @@ class AwayTableTest(unittest.TestCase):
         set_enabled.assert_called_once_with(True)
         app._settings_dialog.destroy()
 
-    def test_workday_notifications_repeat_every_fifteen_minutes(self):
+    def test_notification_settings_default_and_custom_rules_persist(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "notification-settings.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        with mock.patch("hourly_tracker.app.startup.is_supported", return_value=False):
+            app._open_settings()
+        settings = app._settings_dialog
+        self.assertTrue(settings.notification_complete_var.get())
+        self.assertEqual(app._notification_preferences.rules, ())
+
+        settings._add_notification_rule()
+        row = settings._notification_rows[0]
+        row.amount_var.set("2")
+        row.unit_var.set("Hours")
+        row.timing_var.set("After workday completes")
+        settings._notification_timing_changed(row)
+        row.repeat_var.set(True)
+        settings._save_notification_preferences()
+
+        expected = NotificationPreferences(
+            True,
+            (NotificationRule(2, "hours", "after", True),),
+        )
+        self.assertEqual(app._notification_preferences, expected)
+        self.assertEqual(
+            storage.get_setting("notifications"),
+            '{"notify_on_complete": true, "rules": [{"amount": 2, "unit": "hours", "timing": "after", "repeat": true}]}',
+        )
+
+        settings._remove_notification_rule(row)
+        self.assertEqual(app._notification_preferences.rules, ())
+        settings.notification_complete_var.set(False)
+        settings._save_notification_preferences()
+        self.assertFalse(app._notification_preferences.notify_on_complete)
+        settings.destroy()
+
+    def test_default_workday_notification_does_not_repeat(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         storage = Storage(Path(tmp.name) / "notifications.db")
@@ -300,27 +345,92 @@ class AwayTableTest(unittest.TestCase):
         now = dt.datetime.now().replace(microsecond=0)
         summary = SimpleNamespace(
             day=now.date(),
-            projected_end=now - dt.timedelta(hours=1),
+            projected_end=now,
         )
         app._notified_workday_day = None
-        app._next_workday_reminder = None
 
         with mock.patch("hourly_tracker.app.show_desktop_notification") as notify:
             app._update_workday_notifications(now, summary)
-            app._update_workday_notifications(now + dt.timedelta(minutes=19), summary)
-            self.assertEqual(notify.call_count, 1)
-            app._update_workday_notifications(now + dt.timedelta(minutes=20), summary)
-            app._update_workday_notifications(now + dt.timedelta(minutes=40), summary)
+            app._update_workday_notifications(
+                now + dt.timedelta(minutes=20),
+                summary,
+            )
 
-        self.assertEqual(notify.call_count, 3)
-        completed_at = format_clock(summary.projected_end)
-        expected_text = (
-            "Workday complete",
-            f"Your workday was completed at {completed_at}. "
-            "Time to stop working.",
+        self.assertEqual(notify.call_count, 1)
+        self.assertEqual(notify.call_args.args[0], "Workday complete")
+
+    def test_configured_workday_notification_rules(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "notification-rules.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+        rules = (
+            NotificationRule(30, "minutes", "before"),
+            NotificationRule(10, "minutes", "after"),
+            NotificationRule(15, "minutes", "after", True),
         )
-        for call in notify.call_args_list:
-            self.assertEqual(call.args, expected_text)
+        app._set_notification_preferences(NotificationPreferences(True, rules))
+
+        end = dt.datetime.now().replace(microsecond=0) + dt.timedelta(minutes=30)
+        summary = SimpleNamespace(day=end.date(), projected_end=end)
+        with mock.patch("hourly_tracker.app.show_desktop_notification") as notify:
+            app._update_workday_notifications(
+                end - dt.timedelta(minutes=31),
+                summary,
+            )
+            notify.assert_not_called()
+            app._update_workday_notifications(
+                end - dt.timedelta(minutes=30),
+                summary,
+            )
+            self.assertEqual(notify.call_args.args[0], "Workday ending soon")
+            app._update_workday_notifications(
+                end,
+                summary,
+            )
+            self.assertEqual(notify.call_count, 2)
+            app._update_workday_notifications(
+                end + dt.timedelta(minutes=10),
+                summary,
+            )
+            self.assertEqual(notify.call_count, 3)
+            app._update_workday_notifications(
+                end + dt.timedelta(minutes=15),
+                summary,
+            )
+            self.assertEqual(notify.call_count, 4)
+            app._update_workday_notifications(
+                end + dt.timedelta(minutes=20),
+                summary,
+            )
+            self.assertEqual(notify.call_count, 4)
+            app._update_workday_notifications(
+                end + dt.timedelta(minutes=30),
+                summary,
+            )
+            self.assertEqual(notify.call_count, 5)
+            app._set_notification_preferences(
+                NotificationPreferences(
+                    True,
+                    rules[:2]
+                    + (NotificationRule(15, "minutes", "after", False),),
+                )
+            )
+            app._update_workday_notifications(
+                end + dt.timedelta(minutes=31),
+                summary,
+            )
+            app._update_workday_notifications(
+                end + dt.timedelta(minutes=45),
+                summary,
+            )
+            self.assertEqual(notify.call_count, 5)
 
     def test_table_lists_idle_and_delete_returns_it_to_worked_time(self):
         tmp = tempfile.TemporaryDirectory()

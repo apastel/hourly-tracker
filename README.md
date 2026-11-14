@@ -15,7 +15,7 @@ Idle and offline periods are rows in the away table. **Extends day** is the part
 
 Minimizing the window keeps it on the taskbar while idle tracking keeps running. The **X** button minimizes to the system tray by default; change it to quit in **Settings**. Double-click the tray icon to reopen the app, or use the tray menu to reopen or quit. Quitting stops tracking and the next launch records the time in between as offline once it passes the threshold.
 
-When the projected workday ends, Windows displays a desktop notification. If work continues past the end time, the notification repeats every 20 minutes.
+Notifications are configurable in **Settings**. A workday-complete notification is enabled by default. Add alerts for a chosen number of minutes or hours before or after the projected end; after-end alerts can repeat at the same interval. Custom alerts are off by default.
 
 Open **Settings** from the main window to choose **System**, **Light**, or **Dark** appearance. System is the default and follows the operating system's appearance. The Windows startup option in the same dialog enables or disables starting Hourly Tracker when you sign in; it is available only on Windows.
 
