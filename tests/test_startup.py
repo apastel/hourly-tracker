@@ -28,14 +28,17 @@ class StartupTest(unittest.TestCase):
                 mock.patch.object(Path, "exists", return_value=True),
             ):
                 command = startup._startup_command()
-        self.assertEqual(command, subprocess.list2cmdline([str(pythonw), str(script)]))
+        self.assertEqual(
+            command,
+            subprocess.list2cmdline([str(pythonw), str(script.resolve())]),
+        )
 
     def test_console_launcher_is_registered_directly(self):
         with tempfile.TemporaryDirectory() as directory:
             launcher = Path(directory) / "hourly-tracker.exe"
             with mock.patch.object(sys, "argv", [str(launcher)]):
                 command = startup._startup_command()
-        self.assertEqual(command, subprocess.list2cmdline([str(launcher)]))
+        self.assertEqual(command, subprocess.list2cmdline([str(launcher.resolve())]))
 
     def test_frozen_app_launch_uses_executable_path(self):
         executable = r"C:\Program Files\Hourly Tracker\HourlyTracker.exe"
