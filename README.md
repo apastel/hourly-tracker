@@ -21,11 +21,11 @@ Open **Settings** from the main window to choose **System**, **Light**, or **Dar
 
 ## Build a Windows installer
 
-Build on Windows with the same architecture as the desired installer. Install the Inno Setup compiler, then run:
+Build on Windows with the same architecture as the desired installer. Install uv and the Inno Setup compiler, then run:
 
 ```powershell
-python -m pip install -e ".[build]"
-python -m PyInstaller --clean --noconfirm packaging\windows\hourly_tracker.spec
+uv sync --locked --extra build
+uv run python -m PyInstaller --clean --noconfirm packaging\windows\hourly_tracker.spec
 $buildRef = git branch --show-current
 if (-not $buildRef) { $buildRef = git describe --tags --exact-match HEAD 2>$null }
 if (-not $buildRef) { $buildRef = "detached" }
@@ -46,6 +46,10 @@ To prepare a release, run **Tag and draft release**, providing a new `v`-prefixe
 
 The frozen app is built without UPX packing, which can reduce false antivirus detections. As with other unsigned Windows executables, this cannot guarantee that Chrome or SmartScreen will not warn; Authenticode signing with a trusted code-signing certificate is the standard next step for improving publisher identity and reputation.
 
+## Dependency updates
+
+Dependabot checks Python packages and GitHub Actions weekly and opens pull requests for updates. Pull requests run the test suite and build the Windows installer. `uv.lock` records the resolved dependency versions used by these builds. When changing dependency requirements in `pyproject.toml`, regenerate and commit the lockfile with `uv lock`.
+
 The database is separate from the original Hourly Tracker settings:
 
 - Windows: `%APPDATA%\HourlyTrackerV2\hourly_tracker.db`
@@ -57,13 +61,14 @@ The database is separate from the original Hourly Tracker settings:
 The window uses Tk, which ships with Python. System tray support uses Pillow and pystray, installed from the project dependencies.
 
 ```powershell
-python run.py
+uv sync --locked
+uv run python run.py
 ```
 
-Or, after `python -m pip install -e .`:
+Or run the installed console script:
 
 ```powershell
-hourly-tracker
+uv run hourly-tracker
 ```
 
 On the first launch, the start time is the current OS login and is displayed read-only in the main window. A clock time that is still later today is read as the most recent time it occurred, so 11:57 PM just after midnight means 11:57 PM yesterday, not later tonight.
@@ -71,7 +76,7 @@ On the first launch, the start time is the current OS login and is displayed rea
 ## Tests
 
 ```powershell
-python -m unittest discover -s tests -v
+uv run --locked python -m unittest discover -s tests -v
 ```
 
 ## Layout
