@@ -6,10 +6,13 @@ import datetime as dt
 import json
 import logging
 import os
+import queue
 import sqlite3
 import subprocess
 import sys
+import threading
 import tkinter as tk
+import webbrowser
 from dataclasses import dataclass
 from tkinter import messagebox, ttk
 from typing import Callable
@@ -28,6 +31,7 @@ from hourly_tracker.formatting import (
 from hourly_tracker.idle import get_idle_seconds
 from hourly_tracker.notifications import show_desktop_notification
 from hourly_tracker.tracker import AwayRow, Tracker, TrackerError
+from hourly_tracker.updates import RELEASE_PAGE, UpdateCheckError, check_for_update
 
 STATUS_TEXT = {
     "working": "Working",
@@ -232,7 +236,12 @@ class HourlyTrackerApp:
         self._settings_dialog: StartupSettingsDialog | None = None
         self._theme_preference = self._read_theme_preference()
         self._close_behavior = self._read_close_behavior()
+        self._check_updates_on_startup = self._read_update_check_preference()
         self._notification_preferences = self._read_notification_preferences()
+        self._update_check_results: queue.Queue[
+            tuple[str | None, UpdateCheckError | None]
+        ] = queue.Queue()
+        self._update_check_running = False
         self._active_theme = "light"
         self._theme_poll_id: str | None = None
         self._notified_workday_day: dt.date | None = None
@@ -254,6 +263,8 @@ class HourlyTrackerApp:
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(100, self._start_tray)
+        if self._check_updates_on_startup:
+            self.root.after(0, self._start_update_check)
         self._refreshing = False
         if auto_poll:
             self._schedule()
@@ -286,6 +297,12 @@ class HourlyTrackerApp:
     def _read_close_behavior(self) -> str:
         behavior = self.tracker.storage.get_setting("close_behavior", "tray")
         return behavior if behavior in ("tray", "quit") else "tray"
+
+    def _read_update_check_preference(self) -> bool:
+        return (
+            self.tracker.storage.get_setting("check_updates_on_startup", "false")
+            == "true"
+        )
 
     def _read_notification_preferences(self) -> NotificationPreferences:
         raw = self.tracker.storage.get_setting("notifications")
@@ -462,6 +479,23 @@ class HourlyTrackerApp:
         self._close_behavior = behavior
         return True
 
+    def _set_update_check_preference(self, enabled: bool) -> bool:
+        try:
+            self.tracker.storage.set_setting(
+                "check_updates_on_startup",
+                str(enabled).lower(),
+            )
+        except sqlite3.Error as exc:
+            logging.exception("Could not save update-check setting")
+            messagebox.showerror(
+                "Settings",
+                f"Could not save the update-check setting:\n{exc}",
+                parent=self.root,
+            )
+            return False
+        self._check_updates_on_startup = enabled
+        return True
+
     def _set_notification_preferences(
         self,
         preferences: NotificationPreferences,
@@ -488,6 +522,41 @@ class HourlyTrackerApp:
             if theme != self._active_theme:
                 self._apply_theme(theme)
         self._theme_poll_id = self.root.after(30000, self._check_system_theme)
+
+    def _start_update_check(self) -> None:
+        if self._update_check_running:
+            return
+        self._update_check_running = True
+        threading.Thread(target=self._run_update_check, daemon=True).start()
+        self.root.after(100, self._poll_update_check)
+
+    def _run_update_check(self) -> None:
+        try:
+            latest = check_for_update(__version__)
+        except UpdateCheckError as exc:
+            self._update_check_results.put((None, exc))
+        else:
+            self._update_check_results.put((latest, None))
+
+    def _poll_update_check(self) -> None:
+        try:
+            latest, error = self._update_check_results.get_nowait()
+        except queue.Empty:
+            self.root.after(100, self._poll_update_check)
+            return
+
+        self._update_check_running = False
+        if error is not None:
+            logging.warning("%s", error)
+            return
+        if latest is not None and messagebox.askyesno(
+            "Update available",
+            f"Hourly Tracker {latest} is available. "
+            "Would you like to open the release page?",
+            parent=self.root,
+        ):
+            if not webbrowser.open(RELEASE_PAGE):
+                logging.warning("Could not open the Hourly Tracker release page")
 
     def _build(self) -> None:
         self.root.columnconfigure(0, weight=1)
@@ -739,10 +808,12 @@ class HourlyTrackerApp:
             enabled=enabled,
             theme=self._theme_preference,
             close_behavior=self._close_behavior,
+            check_updates_on_startup=self._check_updates_on_startup,
             notification_preferences=self._notification_preferences,
             on_startup_change=self._set_startup_enabled,
             on_theme_change=self._set_theme_preference,
             on_close_behavior_change=self._set_close_behavior,
+            on_update_check_change=self._set_update_check_preference,
             on_notification_change=self._set_notification_preferences,
             windows_supported=startup.is_supported(),
         )
@@ -1075,10 +1146,12 @@ class StartupSettingsDialog(tk.Toplevel):
         enabled: bool,
         theme: str,
         close_behavior: str,
+        check_updates_on_startup: bool,
         notification_preferences: NotificationPreferences,
         on_startup_change: Callable[[bool], None],
         on_theme_change: Callable[[str], bool],
         on_close_behavior_change: Callable[[str], bool],
+        on_update_check_change: Callable[[bool], bool],
         on_notification_change: Callable[[NotificationPreferences], bool],
         windows_supported: bool,
     ):
@@ -1090,12 +1163,15 @@ class StartupSettingsDialog(tk.Toplevel):
         self.on_startup_change = on_startup_change
         self.on_theme_change = on_theme_change
         self.on_close_behavior_change = on_close_behavior_change
+        self.on_update_check_change = on_update_check_change
         self.on_notification_change = on_notification_change
         self._saved_theme = theme
         self._saved_close_behavior = close_behavior
+        self._saved_check_updates_on_startup = check_updates_on_startup
         self._saved_notification_preferences = notification_preferences
         self._notification_rows: list[NotificationRuleWidgets] = []
         self.startup_var = tk.BooleanVar(self, value=enabled)
+        self.check_updates_var = tk.BooleanVar(self, value=check_updates_on_startup)
 
         frame = ttk.Frame(self, padding=16)
         frame.grid(row=0, column=0, sticky="nsew")
@@ -1148,8 +1224,15 @@ class StartupSettingsDialog(tk.Toplevel):
         theme_picker.grid(row=5, column=0, sticky="w")
         theme_picker.bind("<<ComboboxSelected>>", self._save_theme)
 
+        ttk.Checkbutton(
+            frame,
+            text="Check for updates at startup",
+            variable=self.check_updates_var,
+            command=self._save_update_check_preference,
+        ).grid(row=6, column=0, sticky="w", pady=(14, 0))
+
         notifications = ttk.LabelFrame(frame, text="Notifications", padding=8)
-        notifications.grid(row=6, column=0, sticky="ew", pady=(14, 0))
+        notifications.grid(row=7, column=0, sticky="ew", pady=(14, 0))
         self.notification_complete_var = tk.BooleanVar(self)
         ttk.Checkbutton(
             notifications,
@@ -1169,7 +1252,7 @@ class StartupSettingsDialog(tk.Toplevel):
         self._render_notification_preferences(notification_preferences)
 
         ttk.Button(frame, text="Close", command=self._close_dialog).grid(
-            row=7, column=0, sticky="e", pady=(16, 0)
+            row=8, column=0, sticky="e", pady=(16, 0)
         )
         self._center_over_parent(parent)
 
@@ -1224,6 +1307,13 @@ class StartupSettingsDialog(tk.Toplevel):
             self.close_behavior_var.set(
                 self._close_behavior_label(self._saved_close_behavior)
             )
+
+    def _save_update_check_preference(self) -> None:
+        enabled = self.check_updates_var.get()
+        if self.on_update_check_change(enabled):
+            self._saved_check_updates_on_startup = enabled
+        else:
+            self.check_updates_var.set(self._saved_check_updates_on_startup)
 
     def _render_notification_preferences(
         self,

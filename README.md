@@ -21,6 +21,8 @@ Notifications are configurable in **Settings**. A workday-complete notification 
 
 Open **Settings** from the main window to choose **System**, **Light**, or **Dark** appearance. System is the default and follows the operating system's appearance. The Windows startup option in the same dialog enables or disables starting Hourly Tracker when you sign in; it is available only on Windows.
 
+The optional **Check for updates at startup** setting is off by default. When enabled, Hourly Tracker checks GitHub's latest published release in the background and offers to open its release page if a newer version is available. The check sends a request to GitHub and does not include app data.
+
 ## Build a Windows installer
 
 Build on Windows with the same architecture as the desired installer. Install uv and the Inno Setup compiler, then run:

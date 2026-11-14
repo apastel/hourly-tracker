@@ -246,6 +246,84 @@ class AwayTableTest(unittest.TestCase):
             quit_app.assert_not_called()
         app._settings_dialog.destroy()
 
+    def test_update_check_setting_defaults_off_and_persists(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "update-setting.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        self.assertFalse(app._check_updates_on_startup)
+        self.assertIsNone(storage.get_setting("check_updates_on_startup"))
+
+        with mock.patch("hourly_tracker.app.startup.is_supported", return_value=False):
+            app._open_settings()
+        settings = app._settings_dialog
+        self.assertFalse(settings.check_updates_var.get())
+
+        settings.check_updates_var.set(True)
+        settings._save_update_check_preference()
+        self.assertTrue(app._check_updates_on_startup)
+        self.assertEqual(storage.get_setting("check_updates_on_startup"), "true")
+
+        settings.check_updates_var.set(False)
+        settings._save_update_check_preference()
+        self.assertFalse(app._check_updates_on_startup)
+        self.assertEqual(storage.get_setting("check_updates_on_startup"), "false")
+        settings.destroy()
+
+    def test_update_check_starts_on_launch_when_enabled(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "update-on-launch.db")
+        self.addCleanup(storage.close)
+        storage.set_setting("check_updates_on_startup", "true")
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        with mock.patch.object(root, "after", wraps=root.after) as after:
+            app = HourlyTrackerApp(root, tracker, auto_poll=False)
+
+        self.assertTrue(app._check_updates_on_startup)
+        after.assert_any_call(0, app._start_update_check)
+
+    def test_new_release_prompt_opens_the_release_page(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "update-prompt.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+        app._update_check_results.put(("v2.0.0", None))
+
+        with (
+            mock.patch(
+                "hourly_tracker.app.messagebox.askyesno",
+                return_value=True,
+            ) as ask,
+            mock.patch(
+                "hourly_tracker.app.webbrowser.open",
+                return_value=True,
+            ) as open_page,
+        ):
+            app._poll_update_check()
+
+        self.assertIn("v2.0.0", ask.call_args.args[1])
+        open_page.assert_called_once_with(
+            "https://github.com/apastel/hourly-tracker/releases/latest"
+        )
+
     def test_minimize_is_not_redirected_to_tray(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
