@@ -1159,10 +1159,32 @@ class StartupSettingsDialog(tk.Toplevel):
         ttk.Button(frame, text="Close", command=self._close_dialog).grid(
             row=7, column=0, sticky="e", pady=(16, 0)
         )
+        self._center_over_parent(parent)
 
     @staticmethod
     def _close_behavior_label(behavior: str) -> str:
         return "Minimize to tray" if behavior == "tray" else "Quit Hourly Tracker"
+
+    def _center_over_parent(self, parent: tk.Misc) -> None:
+        parent.update_idletasks()
+        self.update_idletasks()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        if parent_width <= 1:
+            parent_width = parent.winfo_reqwidth()
+        if parent_height <= 1:
+            parent_height = parent.winfo_reqheight()
+        x = parent.winfo_rootx() + (parent_width - self.winfo_width()) // 2
+        y = parent.winfo_rooty() + (parent_height - self.winfo_height()) // 2
+        self.geometry(f"+{x}+{y}")
+        self.update_idletasks()
+        parent_center_x = parent.winfo_rootx() + parent_width / 2
+        parent_center_y = parent.winfo_rooty() + parent_height / 2
+        dialog_center_x = self.winfo_rootx() + self.winfo_width() / 2
+        dialog_center_y = self.winfo_rooty() + self.winfo_height() / 2
+        x += round(parent_center_x - dialog_center_x)
+        y += round(parent_center_y - dialog_center_y)
+        self.geometry(f"+{x}+{y}")
 
     def _save_startup(self) -> None:
         enabled = self.startup_var.get()

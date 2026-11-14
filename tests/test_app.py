@@ -280,6 +280,33 @@ class AwayTableTest(unittest.TestCase):
         set_enabled.assert_called_once_with(True)
         app._settings_dialog.destroy()
 
+    def test_settings_window_is_centered_over_main_window(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(Path(tmp.name) / "centered-settings.db")
+        self.addCleanup(storage.close)
+        tracker = Tracker(storage, login_time=lambda: dt.datetime.now())
+
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        app = HourlyTrackerApp(root, tracker, auto_poll=False)
+        root.geometry("860x640+120+80")
+        root.update_idletasks()
+
+        with mock.patch("hourly_tracker.app.startup.is_supported", return_value=False):
+            app._open_settings()
+        dialog = app._settings_dialog
+        dialog.update_idletasks()
+
+        parent_center_x = root.winfo_rootx() + root.winfo_width() / 2
+        parent_center_y = root.winfo_rooty() + root.winfo_height() / 2
+        dialog_center_x = dialog.winfo_rootx() + dialog.winfo_width() / 2
+        dialog_center_y = dialog.winfo_rooty() + dialog.winfo_height() / 2
+        self.assertLessEqual(abs(parent_center_x - dialog_center_x), 20)
+        self.assertLessEqual(abs(parent_center_y - dialog_center_y), 20)
+
+        dialog.destroy()
+
     def test_notification_settings_default_and_custom_rules_persist(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
