@@ -47,7 +47,7 @@ jobs:
         id: version
         shell: pwsh
         env:
-          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_REF: ${{ inputs.source_ref || github.event.pull_request.head.ref || github.ref_name }}
         run: |
           $ref = $env:SOURCE_REF -replace '[^A-Za-z0-9.-]', '-'
           $ref = $ref -replace '^[.-]+|[.-]+$', ''
