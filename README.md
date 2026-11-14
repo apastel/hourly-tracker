@@ -58,7 +58,7 @@ The database is separate from the original Hourly Tracker settings:
 
 ## Run
 
-The window uses Tk, which ships with Python. System tray support uses Pillow and pystray, installed from the project dependencies.
+Requires Python 3.11 or later. The window uses Tk, which ships with Python. System tray support uses Pillow and pystray, installed from the project dependencies.
 
 ```powershell
 uv sync --locked

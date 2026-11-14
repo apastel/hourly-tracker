@@ -3,7 +3,7 @@ name = "hourly-tracker"
 version = "2.0.0"
 description = "Track a workday, splitting away time into idle and offline"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Alex Pastel", email = "alex.r.pastel@gmail.com"},
