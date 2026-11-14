@@ -156,7 +156,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download installer artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: hourly-tracker-installer
           path: release-assets
