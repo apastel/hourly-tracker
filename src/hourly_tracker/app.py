@@ -959,7 +959,7 @@ class HourlyTrackerApp:
                         "Workday ending soon",
                         f"Your workday is expected to complete at "
                         f"{format_clock(workday_end)} "
-                        f"({rule.amount} {unit} before completion).",
+                        f"(in {rule.amount} {unit}).",
                     )
                     self._fired_notification_rules.add(rule_key)
             else:
